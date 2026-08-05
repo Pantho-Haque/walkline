@@ -14,6 +14,7 @@ func ReportCmd() *cobra.Command {
 	var project string
 	var author string
 	var pushed, pending bool
+	var limit int
 
 	cmd := &cobra.Command{
 		Use:     "report",
@@ -26,7 +27,7 @@ func ReportCmd() *cobra.Command {
 			}
 			defer s.Close()
 
-			filter := store.CommitFilter{Since: since, Project: project, Author: author}
+			filter := store.CommitFilter{Since: since, Project: project, Author: author, Limit: limit}
 			if pushed && !pending {
 				v := true
 				filter.Pushed = &v
@@ -62,6 +63,7 @@ func ReportCmd() *cobra.Command {
 	cmd.Flags().StringVar(&author, "author", "", "Author name or email (partial match)")
 	cmd.Flags().BoolVar(&pushed, "pushed", false, "Only pushed commits")
 	cmd.Flags().BoolVar(&pending, "pending", false, "Only pending commits")
+	cmd.Flags().IntVarP(&limit, "limit", "n", 0, "Limit number of results")
 	return cmd
 }
 

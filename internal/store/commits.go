@@ -57,6 +57,7 @@ type CommitFilter struct {
 	Project  string
 	Author   string
 	Pushed   *bool
+	Limit    int
 }
 
 func (s *Store) QueryCommits(f CommitFilter) ([]Commit, error) {
@@ -84,6 +85,10 @@ func (s *Store) QueryCommits(f CommitFilter) ([]Commit, error) {
 		args = append(args, val)
 	}
 	query += " ORDER BY committed_at DESC"
+	if f.Limit > 0 {
+		query += " LIMIT ?"
+		args = append(args, f.Limit)
+	}
 	rows, err := s.db.Query(query, args...)
 	if err != nil {
 		return nil, err
