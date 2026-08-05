@@ -90,7 +90,6 @@ fi
 echo "Extracting..."
 tar xzf "${archive_name}"
 rm "${archive_name}" checksums.txt
-cd "$HOME" || cd /
 
 # Determine install location
 if [ -w /usr/local/bin ]; then
@@ -104,7 +103,8 @@ fi
 cp "$binary_name" "${install_dir}/"
 chmod +x "${install_dir}/${binary_name}"
 
-# Clean up (trap will also run this, but being explicit)
+# Clean up — cd out BEFORE removing tmpdir
+cd "$HOME" || cd /
 rm -rf "$tmpdir"
 
 echo ""
