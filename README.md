@@ -227,7 +227,3 @@ internal/
 install.sh                # Mac/Linux/WSL/Git-Bash installer
 install.ps1               # Windows PowerShell installer
 ```
-
-## License
-
-MIT
