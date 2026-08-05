@@ -5,30 +5,27 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: "0"
     strategy:
+      fail-fast: false
       matrix:
         goos: [darwin, linux, windows]
         goarch: [amd64, arm64]
         exclude:
           - goos: windows
             goarch: arm64
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
           go-version: '1.21'
-
-      - name: Print build env
-        run: go env CGO_ENABLED GOOS GOARCH
 
       - name: Build
         env:
@@ -36,9 +33,7 @@ jobs:
           GOARCH: ${{ matrix.goarch }}
         run: |
           ext=""
-          if [ "$GOOS" = "windows" ]; then
-            ext=".exe"
-          fi
+          if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
           name="walkline_${GITHUB_REF#refs/tags/v}_${GOOS}_${GOARCH}${ext}"
           go build -ldflags="-s -w" -o "$name" ./cmd/walkline
 
@@ -47,41 +42,41 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
         run: |
-          ext=".tar.gz"
+          base="walkline_${GITHUB_REF#refs/tags/v}_${GOOS}_${GOARCH}"
           if [ "$GOOS" = "windows" ]; then
-            ext=".zip"
-          fi
-          name="walkline_${GITHUB_REF#refs/tags/v}_${GOOS}_${GOARCH}"
-          if [ "$GOOS" = "windows" ]; then
-            zip "${name}${ext}" "walkline_${name#walkline_}"*.exe
+            zip "${base}.zip" "${base}.exe"
           else
-            tar czf "${name}${ext}" "walkline_${name#walkline_}"
+            tar czf "${base}.tar.gz" "${base}"
           fi
 
-      - name: Upload release asset
-        uses: softprops/action-gh-release@v1
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
         with:
-          files: walkline_*.tar.gz walkline_*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: walkline_${{ matrix.goos }}_${{ matrix.goarch }}
+          path: |
+            walkline_*.tar.gz
+            walkline_*.zip
 
-  checksums:
+  release:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
 
       - name: Generate checksums
-        run: |
-          sha256sum walkline_*.tar.gz walkline_*.zip > checksums.txt
+        working-directory: dist
+        run: sha256sum walkline_*.tar.gz walkline_*.zip > checksums.txt
 
-      - name: Upload checksums
+      - name: Create release and upload assets
         uses: softprops/action-gh-release@v1
         with:
-          files: checksums.txt
+          files: |
+            dist/walkline_*.tar.gz
+            dist/walkline_*.zip
+            dist/checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
