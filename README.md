@@ -169,6 +169,13 @@ Removes:
 - Push wrapper from shell rc
 - Shell completion files
 
+### `walkline update`
+Update walkline to the latest version from GitHub releases.
+
+```
+walkline update
+```
+
 ### `walkline completion bash|zsh|fish|powershell`
 Generate shell completion script.
 

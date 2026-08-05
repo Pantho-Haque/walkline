@@ -15,5 +15,6 @@ func main() {
 	root.AddCommand(cli.ScanCmd())
 	root.AddCommand(cli.ShellwrapCmd())
 	root.AddCommand(cli.UninstallCmd())
+	root.AddCommand(cli.UpdateCmd())
 	root.Execute()
 }
