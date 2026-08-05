@@ -48,11 +48,10 @@ walkline install
 ```
 
 This:
-1. Creates a global git hooks template at `~/.git-templates/hooks/`
-2. Installs the git push wrapper to your shell rc
-3. Installs shell completion for tab-completion support
+1. Creates a global git hooks template at `~/.git-templates/hooks/` (post-commit and pre-push)
+2. Installs shell completion for tab-completion support
 
-Every **NEW** repo created after this command will automatically get the walkline post-commit hook.
+Every **NEW** repo created after this command will automatically get walkline's post-commit and pre-push hooks.
 
 > **NOTE:** `walkline install` does NOT affect existing repos that were created before this command ran. That's what Step 2 is for.
 
@@ -62,7 +61,7 @@ Every **NEW** repo created after this command will automatically get the walklin
 walkline scan <root-directory> [--depth=1]
 ```
 
-Scans a directory for existing git repos and installs the hook into each one found. The `--depth=1` flag (default) means it checks immediate subdirectories only.
+Scans a directory for existing git repos and installs both post-commit and pre-push hooks into each one found. The `--depth=1` flag (default) means it checks immediate subdirectories only.
 
 For each repo found:
 - **No existing hook** → installs fresh
@@ -74,21 +73,21 @@ Run this once for each directory containing your existing projects.
 ### After Steps 1 + 2
 
 From this point forward:
-- **New repos** automatically get the hook via the template mechanism
+- **New repos** automatically get both hooks via the template mechanism
 - **Existing repos** are already instrumented from Step 2
-- **Push tracking** works automatically via the shell wrapper
+- **Push tracking** works automatically via the pre-push hook
 
 ## CLI Commands
 
 ### `walkline install`
-Sets up the global git template for future repos, installs the push wrapper, and sets up shell completion.
+Sets up the global git template for future repos (post-commit and pre-push hooks) and sets up shell completion.
 
 ```
 walkline install
 ```
 
 ### `walkline scan <root-dir> [--depth=1]`
-Scans existing repos and installs hooks retroactively.
+Scans existing repos and installs both post-commit and pre-push hooks retroactively.
 
 ```
 walkline scan ~/projects --depth=1
@@ -110,10 +109,28 @@ Marks commits as pushed. Auto-detects the current branch if no argument provided
 ```
 walkline mark-pushed              # Auto-detect branch
 walkline mark-pushed origin/main..HEAD  # Manual range
+walkline mark-pushed --range abc123..def456 --remote-ref refs/heads/main  # From pre-push hook
 ```
 
+Flags:
+- `--range string` - Git rev-list range (e.g. `abc123..def456`), bypasses branch auto-detection
+- `--remote-ref string` - Remote ref (informational, for logging)
+
+### `walkline sync [--project=<name>]`
+Reconcile pending commits against their upstream. For each pending commit, checks if it's an ancestor of `@{upstream}` and flips it to pushed if so.
+
+```
+walkline sync                    # Sync all projects
+walkline sync --project=myrepo   # Sync one project
+```
+
+This is run automatically at the start of `walkline report` and `walkline export`, but can also be run manually.
+
+Flags:
+- `--project string` - Sync only this project
+
 ### `walkline report [--since=<date>] [--project=<name>] [--author=<name>] [--pushed] [--pending]`
-Prints a structured report of commits with their push status.
+Prints a structured report of commits with their push status. Automatically runs a reconciliation pass before reporting.
 
 ```
 walkline report
@@ -129,9 +146,10 @@ Flags:
 - `--author string` - Filter by author name or email (partial match)
 - `--pushed` - Only show pushed commits
 - `--pending` - Only show pending (unpushed) commits
+- `-n`, `--limit int` - Limit number of results
 
 ### `walkline export --format=json|csv --out=<path>`
-Exports commits to a file with the same filtering options as report.
+Exports commits to a file with the same filtering options as report. Automatically runs a reconciliation pass before exporting.
 
 ```
 walkline export --format=json --out=commits.json
@@ -147,14 +165,6 @@ Flags:
 - `--pushed` - Only pushed
 - `--pending` - Only pending
 
-### `walkline shellwrap [--install]`
-Shows the git push wrapper and offers to install it.
-
-```
-walkline shellwrap              # Show wrapper code
-walkline shellwrap --install     # Install to shell rc
-```
-
 ### `walkline uninstall [--include-db]`
 Remove walkline and all installed components from your system.
 
@@ -165,9 +175,10 @@ walkline uninstall --include-db  # Remove everything including database
 
 Removes:
 - Binary from `~/.local/bin` or `/usr/local/bin`
-- Git template at `~/.git-templates`
-- Push wrapper from shell rc
+- Git templates at `~/.git-templates` (both post-commit and pre-push hooks)
 - Shell completion files
+
+Note: Hooks already installed in individual repos are left in place (they are harmless).
 
 ### `walkline update`
 Update walkline to the latest version from GitHub releases.
@@ -183,18 +194,23 @@ Generate shell completion script.
 walkline completion zsh > ~/.zsh/completions/_walkline
 ```
 
-## Git Push Wrapper
+## Git Push Tracking
 
-walkline uses a shell wrapper to track push status, since git has no reliable "push succeeded" hook.
+walkline uses a git-native pre-push hook to track push status.
 
-The wrapper is installed automatically by `walkline install`. It:
-1. Intercepts `git push` commands
-2. Detects the pushed commit range (auto-detects branch)
-3. Calls `walkline mark-pushed` to update the database
+### Pre-push hook (primary, reliable)
+A git-native pre-push hook that fires for every `git push`, regardless of how the push is initiated (shell, IDE, CI, etc.). This is the trigger installed by `walkline install` and `walkline scan`.
 
-### Supported shells
-- bash
-- zsh
+The hook:
+1. Reads stdin lines in git's pre-push format
+2. Skips ref deletions and no-op pushes (same SHA)
+3. Calls `walkline mark-pushed --range <old-sha>..<new-sha> --remote-ref <ref>` for each updated ref
+4. Fails open: any internal error logs to stderr and exits 0 so pushes are never blocked
+
+### Reconciliation (`walkline sync`)
+A self-healing safety net that reconciles pending commits against their upstream. Run automatically at the start of `walkline report` and `walkline export`, or manually via `walkline sync`.
+
+For each pending commit, it checks `git merge-base --is-ancestor <commit> @{upstream}` and flips it to pushed if the commit has been pushed (even if the hook didn't fire).
 
 ## .git/hooks Is Never Tracked
 
@@ -215,15 +231,21 @@ walkline is single-machine only. There is no cross-machine sync. Commits recorde
 ### No Automatic Backfill
 Commits made before walkline was installed in a repo simply aren't in the database. No automatic backfill is attempted — this is by design to avoid performance issues with large histories.
 
+### Pre-push Hook and Non-standard Git Setups
+The pre-push hook relies on git's standard stdin protocol. Highly unusual git configurations that bypass the standard push flow (e.g., custom git wrappers, some CI systems) may not trigger the hook. In these cases, `walkline sync` provides a self-healing safety net.
+
 ## Project Structure
 
 ```
 cmd/walkline/main.go      # Entry point, cobra root command
 internal/
 ├── cli/                  # Cobra command definitions
+│   ├── commands.go       # install, scan, uninstall, update
+│   ├── commit.go         # log-commit, mark-pushed
+│   ├── report.go         # report, export
+│   └── sync.go           # sync (reconciliation)
 ├── store/                # SQLite storage layer
-├── hooks/                # Git hook template and repo scanning
-└── shellwrap/           # Git push wrapper generation
+└── hooks/                # Git hook template and repo scanning
 install.sh                # Mac/Linux/WSL/Git-Bash installer
 install.ps1               # Windows PowerShell installer
 ```

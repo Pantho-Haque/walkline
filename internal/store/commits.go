@@ -115,10 +115,11 @@ func (s *Store) QueryCommits(f CommitFilter) ([]Commit, error) {
 func (s *Store) GetCommitByHash(hash string) (*Commit, error) {
 	var c Commit
 	var pushed int
+	var pushedAt sql.NullString
 	err := s.db.QueryRow(
 		"SELECT hash, project_name, project_path, remote_url, author_name, author_email, message, committed_at, pushed, pushed_at FROM commits WHERE hash = ?",
 		hash,
-	).Scan(&c.Hash, &c.ProjectName, &c.ProjectPath, &c.RemoteURL, &c.AuthorName, &c.AuthorEmail, &c.Message, &c.CommittedAt, &pushed, &c.PushedAt)
+	).Scan(&c.Hash, &c.ProjectName, &c.ProjectPath, &c.RemoteURL, &c.AuthorName, &c.AuthorEmail, &c.Message, &c.CommittedAt, &pushed, &pushedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -126,5 +127,42 @@ func (s *Store) GetCommitByHash(hash string) (*Commit, error) {
 		return nil, err
 	}
 	c.Pushed = pushed == 1
+	if pushedAt.Valid {
+		c.PushedAt = pushedAt.String
+	}
 	return &c, nil
+}
+
+func (s *Store) GetPendingProjects() ([]string, error) {
+	rows, err := s.db.Query("SELECT DISTINCT project_path FROM commits WHERE pushed = 0")
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, rows.Err()
+}
+
+func (s *Store) GetPendingHashes(projectPath string) ([]string, error) {
+	rows, err := s.db.Query("SELECT hash FROM commits WHERE pushed = 0 AND project_path = ?", projectPath)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var hashes []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			return nil, err
+		}
+		hashes = append(hashes, h)
+	}
+	return hashes, rows.Err()
 }

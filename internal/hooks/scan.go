@@ -47,13 +47,12 @@ func (s *Scanner) Scan() (*ScanResults, error) {
 		}
 
 		results.Total++
-		hookPath := filepath.Join(gitDir, "hooks", "post-commit")
 
-		status, err := InstallHook(hookPath)
+		postCommitPath := filepath.Join(gitDir, "hooks", "post-commit")
+		status, err := InstallHook(postCommitPath)
 		if err != nil {
 			return err
 		}
-
 		switch status {
 		case HookFresh:
 			results.Fresh++
@@ -63,6 +62,22 @@ func (s *Scanner) Scan() (*ScanResults, error) {
 		case HookNoOp:
 			results.NoOp++
 		}
+
+		prePushPath := filepath.Join(gitDir, "hooks", "pre-push")
+		status, err = InstallPrePushHook(prePushPath)
+		if err != nil {
+			return err
+		}
+		switch status {
+		case HookFresh:
+			results.Fresh++
+		case HookMerged:
+			results.Merged++
+			results.MergedPaths = append(results.MergedPaths, path)
+		case HookNoOp:
+			results.NoOp++
+		}
+
 		return nil
 	})
 

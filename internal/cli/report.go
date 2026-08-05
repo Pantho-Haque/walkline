@@ -27,6 +27,8 @@ func ReportCmd() *cobra.Command {
 			}
 			defer s.Close()
 
+			runSync(s, project)
+
 			filter := store.CommitFilter{Since: since, Project: project, Author: author, Limit: limit}
 			if pushed && !pending {
 				v := true
@@ -85,6 +87,8 @@ func ExportCmd() *cobra.Command {
 				return err
 			}
 			defer s.Close()
+
+			runSync(s, project)
 
 			filter := store.CommitFilter{Since: since, Project: project, Author: author}
 			if pushed && !pending {

@@ -10,13 +10,12 @@ import (
 
 	"github.com/spf13/cobra"
 	"walkline/internal/hooks"
-	"walkline/internal/shellwrap"
 )
 
 func InstallCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "install",
-		Short:   "Install global git template hooks and push wrapper",
+		Short:   "Install global git template hooks",
 		Example: "walkline install",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			templateDir, err := hooks.SetupTemplateDir()
@@ -24,19 +23,7 @@ func InstallCmd() *cobra.Command {
 				return fmt.Errorf("setup template: %w", err)
 			}
 			fmt.Printf("Global git template installed at: %s\n", templateDir)
-			fmt.Println("All NEW repos created after this will automatically have the walkline hook.")
-			fmt.Println()
-
-			wrapper, err := shellwrap.Generate()
-			if err != nil {
-				return fmt.Errorf("generate wrapper: %w", err)
-			}
-			if err := shellwrap.Install(wrapper); err != nil {
-				fmt.Printf("Git push wrapper: %v\n", err)
-				fmt.Println("Run 'walkline shellwrap' to see the wrapper code and install it manually.")
-			} else {
-				fmt.Println("Git push wrapper installed to shell rc.")
-			}
+			fmt.Println("All NEW repos created after this will automatically have walkline's post-commit and pre-push hooks.")
 			fmt.Println()
 
 			// Install shell completion
@@ -176,29 +163,6 @@ func ScanCmd() *cobra.Command {
 	return cmd
 }
 
-func ShellwrapCmd() *cobra.Command {
-	var install bool
-
-	cmd := &cobra.Command{
-		Use:     "shellwrap",
-		Short:   "Show git push wrapper and offer to install",
-		Example: "walkline shellwrap --install",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			wrapper, err := shellwrap.Generate()
-			if err != nil {
-				return err
-			}
-			fmt.Println(wrapper)
-			if install {
-				return shellwrap.Install(wrapper)
-			}
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&install, "install", false, "Install wrapper to shell rc")
-	return cmd
-}
-
 func UninstallCmd() *cobra.Command {
 	var includeDB bool
 
@@ -210,7 +174,6 @@ func UninstallCmd() *cobra.Command {
 			home, _ := os.UserHomeDir()
 			removed := []string{}
 
-			// Remove binary
 			binPaths := []string{
 				filepath.Join(home, ".local", "bin", "walkline"),
 				"/usr/local/bin/walkline",
@@ -221,16 +184,11 @@ func UninstallCmd() *cobra.Command {
 				}
 			}
 
-			// Remove git template
 			templateDir := filepath.Join(home, ".git-templates")
 			if err := os.RemoveAll(templateDir); err == nil {
 				removed = append(removed, templateDir)
 			}
 
-			// Remove push wrapper from shell rc files
-			shellwrap.Remove()
-
-			// Remove shell completion
 			sh := filepath.Base(os.Getenv("SHELL"))
 			switch sh {
 			case "zsh":
@@ -244,7 +202,6 @@ func UninstallCmd() *cobra.Command {
 				os.Remove(filepath.Join(home, "Documents", "PowerShell", "Completions", "walkline.ps1"))
 			}
 
-			// Optionally remove database
 			if includeDB {
 				dbDir := filepath.Join(home, ".walkline")
 				if err := os.RemoveAll(dbDir); err == nil {
@@ -259,6 +216,7 @@ func UninstallCmd() *cobra.Command {
 			if !includeDB {
 				fmt.Println("\nNote: Database preserved at ~/.walkline. Use --include-db to remove it.")
 			}
+			fmt.Println("\nNote: Hooks already installed in individual repos are left in place (they are harmless).")
 			return nil
 		},
 	}

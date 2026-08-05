@@ -92,7 +92,10 @@ func runGit(repoPath string, args ...string) (string, error) {
 }
 
 func MarkPushedCmd() *cobra.Command {
-	return &cobra.Command{
+	var flagRange string
+	var remoteRef string
+
+	cmd := &cobra.Command{
 		Use:     "mark-pushed [ref]",
 		Short:   "Mark commits as pushed",
 		Example: "walkline mark-pushed (auto-detect) or walkline mark-pushed origin/main..HEAD",
@@ -104,11 +107,13 @@ func MarkPushedCmd() *cobra.Command {
 			}
 			defer s.Close()
 
-			ref := "HEAD"
-			if len(args) > 0 {
+			var ref string
+			if flagRange != "" {
+				ref = flagRange
+			} else if len(args) > 0 {
 				ref = args[0]
 			} else {
-				// Auto-detect: try upstream, fallback to HEAD
+				ref = "HEAD"
 				upstream, err := runGit(".", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
 				if err == nil && strings.TrimSpace(upstream) != "" {
 					ref = strings.TrimSpace(upstream) + "..HEAD"
@@ -125,6 +130,9 @@ func MarkPushedCmd() *cobra.Command {
 			return s.MarkPushed(hashes)
 		},
 	}
+	cmd.Flags().StringVar(&flagRange, "range", "", "Git rev-list range (e.g. abc123..def456)")
+	cmd.Flags().StringVar(&remoteRef, "remote-ref", "", "Remote ref (informational, for logging)")
+	return cmd
 }
 
 func resolvePushRange(repoPath, refSpec string) ([]string, error) {
