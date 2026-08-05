@@ -128,3 +128,37 @@ func fileExists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
+
+func Remove() {
+	rcs := DetectShellRC()
+	for _, rc := range rcs {
+		content, err := os.ReadFile(rc)
+		if err != nil {
+			continue
+		}
+		if !strings.Contains(string(content), "walkline git wrapper") {
+			continue
+		}
+		// Remove the wrapper block
+		lines := strings.Split(string(content), "\n")
+		var newLines []string
+		inWrapper := false
+		for _, line := range lines {
+			if strings.Contains(line, "# walkline git wrapper") {
+				inWrapper = true
+				continue
+			}
+			if inWrapper {
+				if strings.HasPrefix(line, "}") && !strings.Contains(line, "#") {
+					inWrapper = false
+					continue
+				}
+				if line == "" || strings.HasPrefix(line, "#") {
+					continue
+				}
+			}
+			newLines = append(newLines, line)
+		}
+		os.WriteFile(rc, []byte(strings.Join(newLines, "\n")), 0644)
+	}
+}

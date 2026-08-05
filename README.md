@@ -16,7 +16,7 @@ curl -fsSL https://raw.githubusercontent.com/Pantho-Haque/walkline/main/install.
 irm https://raw.githubusercontent.com/Pantho-Haque/walkline/main/install.ps1 | iex
 ```
 
-Both scripts auto-detect platform/architecture, download and checksum-verify the matching release binary, install it, clean up afterward, and run `walkline install` to set up the git hooks template. No leftover files, nothing written outside the chosen install directory.
+Both scripts auto-detect platform/architecture, download and checksum-verify the matching release binary, install it, clean up afterward, and run `walkline install` to set up the git hooks template and shell completion. No leftover files, nothing written outside the chosen install directory.
 
 For a specific version, set `WALKLINE_VERSION`:
 ```bash
@@ -47,7 +47,12 @@ go build ./...
 walkline install
 ```
 
-This creates a global git hooks template at `~/.git-templates/hooks/` and configures git to use it. Every **NEW** repo created after this command will automatically get the walkline post-commit hook.
+This:
+1. Creates a global git hooks template at `~/.git-templates/hooks/`
+2. Installs the git push wrapper to your shell rc
+3. Installs shell completion for tab-completion support
+
+Every **NEW** repo created after this command will automatically get the walkline post-commit hook.
 
 > **NOTE:** `walkline install` does NOT affect existing repos that were created before this command ran. That's what Step 2 is for.
 
@@ -71,44 +76,118 @@ Run this once for each directory containing your existing projects.
 From this point forward:
 - **New repos** automatically get the hook via the template mechanism
 - **Existing repos** are already instrumented from Step 2
-- **Push tracking** requires adding the git wrapper to your shell (see below)
+- **Push tracking** works automatically via the shell wrapper
+
+## CLI Commands
+
+### `walkline install`
+Sets up the global git template for future repos, installs the push wrapper, and sets up shell completion.
+
+```
+walkline install
+```
+
+### `walkline scan <root-dir> [--depth=1]`
+Scans existing repos and installs hooks retroactively.
+
+```
+walkline scan ~/projects --depth=1
+```
+
+Flags:
+- `--depth int` - Directory depth to scan (default: 1)
+
+### `walkline log-commit`
+Records the most recent commit to the database. Called automatically by the post-commit hook.
+
+```
+walkline log-commit
+```
+
+### `walkline mark-pushed [ref]`
+Marks commits as pushed. Auto-detects the current branch if no argument provided.
+
+```
+walkline mark-pushed              # Auto-detect branch
+walkline mark-pushed origin/main..HEAD  # Manual range
+```
+
+### `walkline report [--since=<date>] [--project=<name>] [--author=<name>] [--pushed] [--pending]`
+Prints a structured report of commits with their push status.
+
+```
+walkline report
+walkline report --project=myrepo
+walkline report --author=john
+walkline report --pushed
+walkline report --pending
+```
+
+Flags:
+- `--since string` - Since date (RFC3339, e.g., `2024-01-15` or `2024-01-15T00:00:00Z`)
+- `--project string` - Filter by project name
+- `--author string` - Filter by author name or email (partial match)
+- `--pushed` - Only show pushed commits
+- `--pending` - Only show pending (unpushed) commits
+
+### `walkline export --format=json|csv --out=<path>`
+Exports commits to a file with the same filtering options as report.
+
+```
+walkline export --format=json --out=commits.json
+walkline export --format=csv --out=commits.csv --project=myrepo
+```
+
+Flags:
+- `--format string` - Format: `json` or `csv` (default: `csv`)
+- `--out string` - Output file path (required)
+- `--since string` - Since date
+- `--project string` - Project name
+- `--author string` - Author name or email
+- `--pushed` - Only pushed
+- `--pending` - Only pending
+
+### `walkline shellwrap [--install]`
+Shows the git push wrapper and offers to install it.
+
+```
+walkline shellwrap              # Show wrapper code
+walkline shellwrap --install     # Install to shell rc
+```
+
+### `walkline uninstall [--include-db]`
+Remove walkline and all installed components from your system.
+
+```
+walkline uninstall              # Remove but keep database
+walkline uninstall --include-db  # Remove everything including database
+```
+
+Removes:
+- Binary from `~/.local/bin` or `/usr/local/bin`
+- Git template at `~/.git-templates`
+- Push wrapper from shell rc
+- Shell completion files
+
+### `walkline completion bash|zsh|fish|powershell`
+Generate shell completion script.
+
+```
+walkline completion zsh > ~/.zsh/completions/_walkline
+```
 
 ## Git Push Wrapper
 
 walkline uses a shell wrapper to track push status, since git has no reliable "push succeeded" hook.
 
-After running `walkline install`, you'll see a wrapper script printed. Add it to your shell rc file (`.bashrc` or `.zshrc`).
-
-The wrapper:
+The wrapper is installed automatically by `walkline install`. It:
 1. Intercepts `git push` commands
-2. Detects the pushed commit range
+2. Detects the pushed commit range (auto-detects branch)
 3. Calls `walkline mark-pushed` to update the database
 
 ### Supported shells
 - bash
 - zsh
-
-## CLI Commands
-
-### `walkline log-commit`
-Records the most recent commit to the database. Called automatically by the post-commit hook.
-
-### `walkline mark-pushed <ref>`
-Marks commits as pushed given a ref range (e.g., `origin/main..HEAD`).
-
-### `walkline report [--since=<date>] [--project=<name>] [--pushed|--unpushed]`
-Prints a table of commits with their push status.
-
-`--since` accepts an RFC3339 date string (e.g., `2024-01-15T00:00:00Z` or `2024-01-15`).
-
-### `walkline export --format=json|csv --out=<path>`
-Exports commits to a file.
-
-### `walkline install`
-Sets up the global git template for future repos.
-
-### `walkline scan <root-dir> [--depth=1]`
-Scans existing repos and installs hooks.
 
 ## .git/hooks Is Never Tracked
 
@@ -137,7 +216,7 @@ internal/
 ├── cli/                  # Cobra command definitions
 ├── store/                # SQLite storage layer
 ├── hooks/                # Git hook template and repo scanning
-└── shellwrap/            # Git push wrapper generation
+└── shellwrap/           # Git push wrapper generation
 install.sh                # Mac/Linux/WSL/Git-Bash installer
 install.ps1               # Windows PowerShell installer
 ```
