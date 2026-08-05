@@ -129,7 +129,7 @@ This is run automatically at the start of `walkline report` and `walkline export
 Flags:
 - `--project string` - Sync only this project
 
-### `walkline report [--since=<date>] [--project=<name>] [--author=<name>] [--pushed] [--pending]`
+### `walkline report [--since=<date>] [--until=<date>] [--at=<date>] [--project=<name>] [--author=<name>] [--pushed] [--pending]`
 Prints a structured report of commits with their push status. Automatically runs a reconciliation pass before reporting.
 
 ```
@@ -138,10 +138,17 @@ walkline report --project=myrepo
 walkline report --author=john
 walkline report --pushed
 walkline report --pending
+walkline report --since=2024-01-15
+walkline report --until=2024-12-31
+walkline report --at=2024-06-15
 ```
 
-Flags:
-- `--since string` - Since date (RFC3339, e.g., `2024-01-15` or `2024-01-15T00:00:00Z`)
+Date filter flags (mutually exclusive — use only one):
+- `--since string` - Commits from this date onward (inclusive). Bare date `2024-01-15` means from midnight that day; full RFC3339 timestamp for precision.
+- `--until string` - Commits up to this date (inclusive). Bare date `2024-12-31` means through end of day (23:59:59); the given date itself IS included.
+- `--at string` - Commits on that exact calendar day only (00:00:00 through 23:59:59 inclusive).
+
+Other flags:
 - `--project string` - Filter by project name
 - `--author string` - Filter by author name or email (partial match)
 - `--pushed` - Only show pushed commits
@@ -154,12 +161,15 @@ Exports commits to a file with the same filtering options as report. Automatical
 ```
 walkline export --format=json --out=commits.json
 walkline export --format=csv --out=commits.csv --project=myrepo
+walkline export --format=csv --out=commits.csv --since=2024-01-01 --until=2024-06-30
 ```
 
 Flags:
 - `--format string` - Format: `json` or `csv` (default: `csv`)
 - `--out string` - Output file path (required)
-- `--since string` - Since date
+- `--since string` - Commits from this date onward (inclusive)
+- `--until string` - Commits up to this date (inclusive)
+- `--at string` - Commits on this exact date only
 - `--project string` - Project name
 - `--author string` - Author name or email
 - `--pushed` - Only pushed

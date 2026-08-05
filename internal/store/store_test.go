@@ -350,3 +350,109 @@ func TestSyncIntegration(t *testing.T) {
 		t.Error("pushed_at should be set after sync")
 	}
 }
+
+func TestQueryCommitsDateFilter(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "test.db")
+
+	db, err := openDB(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	commits := []Commit{
+		{Hash: "h1", ProjectName: "p1", ProjectPath: "/p1", CommittedAt: "2024-01-14T23:59:59Z"},
+		{Hash: "h2", ProjectName: "p1", ProjectPath: "/p1", CommittedAt: "2024-01-15T00:00:00Z"},
+		{Hash: "h3", ProjectName: "p1", ProjectPath: "/p1", CommittedAt: "2024-01-15T12:00:00Z"},
+		{Hash: "h4", ProjectName: "p1", ProjectPath: "/p1", CommittedAt: "2024-01-15T23:59:59Z"},
+		{Hash: "h5", ProjectName: "p1", ProjectPath: "/p1", CommittedAt: "2024-01-16T00:00:00Z"},
+	}
+	for _, c := range commits {
+		if err := db.InsertCommit(&c); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	t.Run("since end of day", func(t *testing.T) {
+		results, err := db.QueryCommits(CommitFilter{Since: "2024-01-15T00:00:00Z"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 4 {
+			t.Fatalf("expected 4 commits, got %d", len(results))
+		}
+		hashes := make(map[string]bool)
+		for _, r := range results {
+			hashes[r.Hash] = true
+		}
+		for _, want := range []string{"h2", "h3", "h4", "h5"} {
+			if !hashes[want] {
+				t.Errorf("expected commit %s in results", want)
+			}
+		}
+	})
+
+	t.Run("until start of day", func(t *testing.T) {
+		results, err := db.QueryCommits(CommitFilter{Until: "2024-01-15T23:59:59Z"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 4 {
+			t.Fatalf("expected 4 commits, got %d", len(results))
+		}
+		hashes := make(map[string]bool)
+		for _, r := range results {
+			hashes[r.Hash] = true
+		}
+		for _, want := range []string{"h1", "h2", "h3", "h4"} {
+			if !hashes[want] {
+				t.Errorf("expected commit %s in results", want)
+			}
+		}
+	})
+
+	t.Run("at exact day boundaries", func(t *testing.T) {
+		results, err := db.QueryCommits(CommitFilter{
+			Since: "2024-01-15T00:00:00Z",
+			Until: "2024-01-15T23:59:59Z",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 3 {
+			t.Fatalf("expected 3 commits, got %d", len(results))
+		}
+		hashes := make(map[string]bool)
+		for _, r := range results {
+			hashes[r.Hash] = true
+		}
+		for _, want := range []string{"h2", "h3", "h4"} {
+			if !hashes[want] {
+				t.Errorf("expected commit %s in results", want)
+			}
+		}
+	})
+
+	t.Run("exclusive boundary - just before", func(t *testing.T) {
+		results, err := db.QueryCommits(CommitFilter{Until: "2024-01-14T23:59:58Z"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 0 {
+			t.Fatalf("expected 0 commits, got %d", len(results))
+		}
+	})
+
+	t.Run("inclusive boundary - exactly at", func(t *testing.T) {
+		results, err := db.QueryCommits(CommitFilter{Until: "2024-01-14T23:59:59Z"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(results) != 1 {
+			t.Fatalf("expected 1 commit, got %d", len(results))
+		}
+		if results[0].Hash != "h1" {
+			t.Errorf("expected hash h1, got %s", results[0].Hash)
+		}
+	})
+}

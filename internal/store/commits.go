@@ -53,11 +53,13 @@ func (s *Store) MarkPushed(hashes []string) error {
 }
 
 type CommitFilter struct {
-	Since    string
-	Project  string
-	Author   string
-	Pushed   *bool
-	Limit    int
+	Since   string
+	Until   string
+	At      string
+	Project string
+	Author  string
+	Pushed  *bool
+	Limit   int
 }
 
 func (s *Store) QueryCommits(f CommitFilter) ([]Commit, error) {
@@ -66,6 +68,10 @@ func (s *Store) QueryCommits(f CommitFilter) ([]Commit, error) {
 	if f.Since != "" {
 		query += " AND committed_at >= ?"
 		args = append(args, f.Since)
+	}
+	if f.Until != "" {
+		query += " AND committed_at <= ?"
+		args = append(args, f.Until)
 	}
 	if f.Project != "" {
 		query += " AND project_name = ?"

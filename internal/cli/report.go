@@ -11,6 +11,8 @@ import (
 
 func ReportCmd() *cobra.Command {
 	var since string
+	var until string
+	var at string
 	var project string
 	var author string
 	var pushed, pending bool
@@ -29,16 +31,22 @@ func ReportCmd() *cobra.Command {
 
 			runSync(s, project)
 
-			filter := store.CommitFilter{Since: since, Project: project, Author: author, Limit: limit}
+			dateFilter, err := BuildDateFilter(since, until, at)
+			if err != nil {
+				return err
+			}
+			dateFilter.Project = project
+			dateFilter.Author = author
+			dateFilter.Limit = limit
 			if pushed && !pending {
 				v := true
-				filter.Pushed = &v
+				dateFilter.Pushed = &v
 			} else if pending && !pushed {
 				v := false
-				filter.Pushed = &v
+				dateFilter.Pushed = &v
 			}
 
-			commits, err := s.QueryCommits(filter)
+			commits, err := s.QueryCommits(dateFilter)
 			if err != nil {
 				return err
 			}
@@ -60,11 +68,13 @@ func ReportCmd() *cobra.Command {
 			return nil
 		},
 	}
-	cmd.Flags().StringVar(&since, "since", "", "Since date (RFC3339)")
+	cmd.Flags().StringVar(&since, "since", "", "Commits from this date onward (inclusive)")
+	cmd.Flags().StringVar(&until, "until", "", "Commits up to this date (inclusive)")
+	cmd.Flags().StringVar(&at, "at", "", "Commits on this exact date only")
 	cmd.Flags().StringVar(&project, "project", "", "Project name")
 	cmd.Flags().StringVar(&author, "author", "", "Author name or email (partial match)")
 	cmd.Flags().BoolVar(&pushed, "pushed", false, "Only pushed commits")
-	cmd.Flags().BoolVar(&pending, "pending", false, "Only pending commits")
+	cmd.Flags().BoolVar(&pending, "pending", false, "Only pending (unpushed) commits")
 	cmd.Flags().IntVarP(&limit, "limit", "n", 0, "Limit number of results")
 	return cmd
 }
@@ -73,6 +83,8 @@ func ExportCmd() *cobra.Command {
 	var format string
 	var outPath string
 	var since string
+	var until string
+	var at string
 	var project string
 	var author string
 	var pushed, pending bool
@@ -90,16 +102,21 @@ func ExportCmd() *cobra.Command {
 
 			runSync(s, project)
 
-			filter := store.CommitFilter{Since: since, Project: project, Author: author}
+			dateFilter, err := BuildDateFilter(since, until, at)
+			if err != nil {
+				return err
+			}
+			dateFilter.Project = project
+			dateFilter.Author = author
 			if pushed && !pending {
 				v := true
-				filter.Pushed = &v
+				dateFilter.Pushed = &v
 			} else if pending && !pushed {
 				v := false
-				filter.Pushed = &v
+				dateFilter.Pushed = &v
 			}
 
-			commits, err := s.QueryCommits(filter)
+			commits, err := s.QueryCommits(dateFilter)
 			if err != nil {
 				return err
 			}
@@ -119,7 +136,9 @@ func ExportCmd() *cobra.Command {
 	cmd.Flags().StringVar(&format, "format", "csv", "Format: json or csv")
 	cmd.Flags().StringVar(&outPath, "out", "", "Output file path")
 	cmd.MarkFlagRequired("out")
-	cmd.Flags().StringVar(&since, "since", "", "Since date")
+	cmd.Flags().StringVar(&since, "since", "", "Commits from this date onward (inclusive)")
+	cmd.Flags().StringVar(&until, "until", "", "Commits up to this date (inclusive)")
+	cmd.Flags().StringVar(&at, "at", "", "Commits on this exact date only")
 	cmd.Flags().StringVar(&project, "project", "", "Project name")
 	cmd.Flags().StringVar(&author, "author", "", "Author name or email")
 	cmd.Flags().BoolVar(&pushed, "pushed", false, "Only pushed")
