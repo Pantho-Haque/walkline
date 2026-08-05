@@ -77,10 +77,10 @@ curl -fsSL -o checksums.txt "https://github.com/${OWNER}/${REPO}/releases/downlo
 
 # Verify checksum
 echo "Verifying checksum..."
-if command -v sha256sum >/dev/null 2>&1; then
-  grep " ${archive_name}$" checksums.txt | sha256sum --check --status
-elif command -v shasum >/dev/null 2>&1; then
+if command -v shasum >/dev/null 2>&1; then
   grep " ${archive_name}$" checksums.txt | shasum -a 256 --check --status
+elif command -v sha256sum >/dev/null 2>&1; then
+  grep " ${archive_name}$" checksums.txt | sha256sum --check --status
 else
   echo "Error: Neither sha256sum nor shasum available for verification" >&2
   exit 1
