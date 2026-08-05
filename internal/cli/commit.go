@@ -73,7 +73,9 @@ func getCommitInfo(repoPath string) (*store.Commit, error) {
 		name := parts[len(parts)-1]
 		commit.ProjectName = strings.TrimSuffix(name, ".git")
 	} else {
-		commit.ProjectName = filepath.Base(repoPath)
+		repoRoot, _ := runGit(repoPath, "rev-parse", "--show-toplevel")
+		repoRoot = strings.TrimSpace(repoRoot)
+		commit.ProjectName = filepath.Base(repoRoot)
 	}
 
 	return commit, nil

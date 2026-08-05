@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/spf13/cobra"
 	"walkline/internal/store"
@@ -13,12 +12,13 @@ import (
 func ReportCmd() *cobra.Command {
 	var since string
 	var project string
+	var author string
 	var pushed, unpushed bool
 
 	cmd := &cobra.Command{
 		Use:     "report",
 		Short:   "Show push status report",
-		Example: "walkline report --project=myrepo --unpushed",
+		Example: "walkline report --project=myrepo --author=john",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := store.New()
 			if err != nil {
@@ -26,7 +26,7 @@ func ReportCmd() *cobra.Command {
 			}
 			defer s.Close()
 
-			filter := store.CommitFilter{Since: since, Project: project}
+			filter := store.CommitFilter{Since: since, Project: project, Author: author}
 			if pushed && !unpushed {
 				v := true
 				filter.Pushed = &v
@@ -40,39 +40,29 @@ func ReportCmd() *cobra.Command {
 				return err
 			}
 
-			fmt.Printf("%-20s %-12s %-8s %-15s %-40s %s\n",
-				"PROJECT", "DATE", "HASH", "AUTHOR", "MESSAGE", "PUSHED")
-			fmt.Println(strings.Repeat("-", 110))
 			for _, c := range commits {
 				shortHash := c.Hash[:7]
 				date := c.CommittedAt[:10]
-				msg := c.Message
-				if len(msg) > 38 {
-					msg = msg[:38] + "..."
-				}
-				pushedStr := "N"
+				authorLine := fmt.Sprintf("%s <%s>", c.AuthorName, c.AuthorEmail)
+
+				pushedStatus := "[✗ Pending]"
 				if c.Pushed {
-					pushedStr = "Y"
+					pushedStatus = "[✓ Pushed]"
 				}
-				fmt.Printf("%-20s %-12s %-8s %-15s %-40s %s\n",
-					truncate(c.ProjectName, 20), date, shortHash,
-					truncate(c.AuthorName, 15), msg, pushedStr)
+
+				fmt.Printf("● %s (%s) • %s • %s\n", c.ProjectName, shortHash, date, pushedStatus)
+				fmt.Printf("├─ Author: %s\n", authorLine)
+				fmt.Printf("└─ Message: %s\n\n", c.Message)
 			}
 			return nil
 		},
 	}
 	cmd.Flags().StringVar(&since, "since", "", "Since date (RFC3339)")
 	cmd.Flags().StringVar(&project, "project", "", "Project name")
+	cmd.Flags().StringVar(&author, "author", "", "Author name or email (partial match)")
 	cmd.Flags().BoolVar(&pushed, "pushed", false, "Only pushed")
 	cmd.Flags().BoolVar(&unpushed, "unpushed", false, "Only unpushed")
 	return cmd
-}
-
-func truncate(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	return s[:max]
 }
 
 func ExportCmd() *cobra.Command {
@@ -80,6 +70,7 @@ func ExportCmd() *cobra.Command {
 	var outPath string
 	var since string
 	var project string
+	var author string
 	var pushed, unpushed bool
 
 	cmd := &cobra.Command{
@@ -93,7 +84,7 @@ func ExportCmd() *cobra.Command {
 			}
 			defer s.Close()
 
-			filter := store.CommitFilter{Since: since, Project: project}
+			filter := store.CommitFilter{Since: since, Project: project, Author: author}
 			if pushed && !unpushed {
 				v := true
 				filter.Pushed = &v
@@ -124,6 +115,7 @@ func ExportCmd() *cobra.Command {
 	cmd.MarkFlagRequired("out")
 	cmd.Flags().StringVar(&since, "since", "", "Since date")
 	cmd.Flags().StringVar(&project, "project", "", "Project name")
+	cmd.Flags().StringVar(&author, "author", "", "Author name or email")
 	cmd.Flags().BoolVar(&pushed, "pushed", false, "Only pushed")
 	cmd.Flags().BoolVar(&unpushed, "unpushed", false, "Only unpushed")
 	return cmd

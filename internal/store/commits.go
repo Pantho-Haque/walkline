@@ -55,6 +55,7 @@ func (s *Store) MarkPushed(hashes []string) error {
 type CommitFilter struct {
 	Since    string
 	Project  string
+	Author   string
 	Pushed   *bool
 }
 
@@ -68,6 +69,11 @@ func (s *Store) QueryCommits(f CommitFilter) ([]Commit, error) {
 	if f.Project != "" {
 		query += " AND project_name = ?"
 		args = append(args, f.Project)
+	}
+	if f.Author != "" {
+		query += " AND (author_name LIKE ? OR author_email LIKE ?)"
+		likeAuthor := "%" + f.Author + "%"
+		args = append(args, likeAuthor, likeAuthor)
 	}
 	if f.Pushed != nil {
 		val := 0
