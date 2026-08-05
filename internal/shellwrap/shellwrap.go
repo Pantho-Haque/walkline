@@ -11,12 +11,13 @@ const wrapperBash = `
 # walkline git wrapper - paste this into your .bashrc or .zshrc
 git() {
     if [ "$1" = "push" ]; then
+        # Capture range BEFORE push (remote ref updates after push completes)
+        local range
+        range=$(command git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1 \
+            && echo "@{u}..HEAD" || echo "HEAD")
         command git "$@"
         local status=$?
         if [ $status -eq 0 ]; then
-            local range
-            range=$(command git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1 \
-                && echo "@{u}..HEAD" || echo "HEAD")
             walkline mark-pushed "$range" 2>/dev/null
         fi
         return $status
@@ -30,15 +31,16 @@ const wrapperZsh = `
 # walkline git wrapper - paste this into your .bashrc or .zshrc
 git() {
     if [[ "$1" = "push" ]]; then
+        # Capture range BEFORE push (remote ref updates after push completes)
+        local wl_range
+        if command git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
+            wl_range="@{u}..HEAD"
+        else
+            wl_range="HEAD"
+        fi
         command git "$@"
         local wl_status=$?
         if [[ $wl_status -eq 0 ]]; then
-            local wl_range
-            if command git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
-                wl_range="@{u}..HEAD"
-            else
-                wl_range="HEAD"
-            fi
             walkline mark-pushed "$wl_range" 2>/dev/null
         fi
         return $wl_status
