@@ -31,17 +31,17 @@ const wrapperZsh = `
 git() {
     if [[ "$1" = "push" ]]; then
         command git "$@"
-        local status=$?
-        if [[ $status -eq 0 ]]; then
-            local range
+        local wl_status=$?
+        if [[ $wl_status -eq 0 ]]; then
+            local wl_range
             if command git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
-                range="@{u}..HEAD"
+                wl_range="@{u}..HEAD"
             else
-                range="HEAD"
+                wl_range="HEAD"
             fi
-            walkline mark-pushed "$range" 2>/dev/null
+            walkline mark-pushed "$wl_range" 2>/dev/null
         fi
-        return $status
+        return $wl_status
     else
         command git "$@"
     fi
