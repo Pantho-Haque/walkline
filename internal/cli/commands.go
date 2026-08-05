@@ -11,7 +11,7 @@ import (
 func InstallCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "install",
-		Short:   "Install global git template hooks for future repos",
+		Short:   "Install global git template hooks and push wrapper",
 		Example: "walkline install",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			templateDir, err := hooks.SetupTemplateDir()
@@ -21,26 +21,20 @@ func InstallCmd() *cobra.Command {
 			fmt.Printf("Global git template installed at: %s\n", templateDir)
 			fmt.Println("All NEW repos created after this will automatically have the walkline hook.")
 			fmt.Println()
-			fmt.Println("NOTE: This does NOT affect existing repos. Run 'walkline scan <root>' to")
-			fmt.Println("      instrument existing repos (see 'walkline scan --help' for details).")
-			fmt.Println()
 
 			wrapper, err := shellwrap.Generate()
 			if err != nil {
 				return fmt.Errorf("generate wrapper: %w", err)
 			}
-			fmt.Println("=== Git push wrapper ===")
-			fmt.Println(wrapper)
-			fmt.Println("Append this to your shell rc file to enable push tracking.")
-			fmt.Println()
-
-			rcFiles := shellwrap.DetectShellRC()
-			if len(rcFiles) == 0 {
-				fmt.Println("Could not detect shell rc files. Please add the wrapper manually.")
+			if err := shellwrap.Install(wrapper); err != nil {
+				fmt.Printf("Git push wrapper: %v\n", err)
+				fmt.Println("Run 'walkline shellwrap' to see the wrapper code and install it manually.")
 			} else {
-				fmt.Printf("Detected shell rc files: %v\n", rcFiles)
-				fmt.Println("Run 'shellwrap' subcommand to get installation help.")
+				fmt.Println("Git push wrapper installed to shell rc.")
 			}
+			fmt.Println()
+			fmt.Println("NOTE: This does NOT affect existing repos. Run 'walkline scan <root>' to")
+			fmt.Println("      instrument existing repos (see 'walkline scan --help' for details).")
 			return nil
 		},
 	}
