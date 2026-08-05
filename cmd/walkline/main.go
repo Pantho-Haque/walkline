@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+
 	"github.com/spf13/cobra"
 	"walkline/internal/cli"
 )
@@ -16,5 +18,7 @@ func main() {
 	root.AddCommand(cli.UninstallCmd())
 	root.AddCommand(cli.UpdateCmd())
 	root.AddCommand(cli.SyncCmd())
-	root.Execute()
+	if err := root.Execute(); err != nil {
+		os.Exit(1)
+	}
 }

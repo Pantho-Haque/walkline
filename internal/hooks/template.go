@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 const hookContent = `#!/bin/sh
@@ -69,8 +70,9 @@ func SetupTemplateDir() (string, error) {
 	}
 
 	cmd := exec.Command("git", "config", "--global", "init.templateDir", filepath.Join(home, ".git-templates"))
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("git config: %w", err)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git config failed: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 
 	return templateDir, nil
