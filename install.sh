@@ -90,6 +90,7 @@ fi
 echo "Extracting..."
 tar xzf "${archive_name}"
 rm "${archive_name}" checksums.txt
+cd "$HOME" || cd /
 
 # Determine install location
 if [ -w /usr/local/bin ]; then
