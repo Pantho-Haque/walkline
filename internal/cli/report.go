@@ -13,7 +13,7 @@ func ReportCmd() *cobra.Command {
 	var since string
 	var project string
 	var author string
-	var pushed, unpushed bool
+	var pushed, pending bool
 
 	cmd := &cobra.Command{
 		Use:     "report",
@@ -27,10 +27,10 @@ func ReportCmd() *cobra.Command {
 			defer s.Close()
 
 			filter := store.CommitFilter{Since: since, Project: project, Author: author}
-			if pushed && !unpushed {
+			if pushed && !pending {
 				v := true
 				filter.Pushed = &v
-			} else if unpushed && !pushed {
+			} else if pending && !pushed {
 				v := false
 				filter.Pushed = &v
 			}
@@ -60,8 +60,8 @@ func ReportCmd() *cobra.Command {
 	cmd.Flags().StringVar(&since, "since", "", "Since date (RFC3339)")
 	cmd.Flags().StringVar(&project, "project", "", "Project name")
 	cmd.Flags().StringVar(&author, "author", "", "Author name or email (partial match)")
-	cmd.Flags().BoolVar(&pushed, "pushed", false, "Only pushed")
-	cmd.Flags().BoolVar(&unpushed, "unpushed", false, "Only unpushed")
+	cmd.Flags().BoolVar(&pushed, "pushed", false, "Only pushed commits")
+	cmd.Flags().BoolVar(&pending, "pending", false, "Only pending commits")
 	return cmd
 }
 
@@ -71,7 +71,7 @@ func ExportCmd() *cobra.Command {
 	var since string
 	var project string
 	var author string
-	var pushed, unpushed bool
+	var pushed, pending bool
 
 	cmd := &cobra.Command{
 		Use:     "export",
@@ -85,10 +85,10 @@ func ExportCmd() *cobra.Command {
 			defer s.Close()
 
 			filter := store.CommitFilter{Since: since, Project: project, Author: author}
-			if pushed && !unpushed {
+			if pushed && !pending {
 				v := true
 				filter.Pushed = &v
-			} else if unpushed && !pushed {
+			} else if pending && !pushed {
 				v := false
 				filter.Pushed = &v
 			}
@@ -117,7 +117,7 @@ func ExportCmd() *cobra.Command {
 	cmd.Flags().StringVar(&project, "project", "", "Project name")
 	cmd.Flags().StringVar(&author, "author", "", "Author name or email")
 	cmd.Flags().BoolVar(&pushed, "pushed", false, "Only pushed")
-	cmd.Flags().BoolVar(&unpushed, "unpushed", false, "Only unpushed")
+	cmd.Flags().BoolVar(&pending, "pending", false, "Only pending")
 	return cmd
 }
 

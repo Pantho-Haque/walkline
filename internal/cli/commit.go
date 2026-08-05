@@ -93,10 +93,10 @@ func runGit(repoPath string, args ...string) (string, error) {
 
 func MarkPushedCmd() *cobra.Command {
 	return &cobra.Command{
-		Use:     "mark-pushed <ref-range-or-branch>",
+		Use:     "mark-pushed [ref]",
 		Short:   "Mark commits as pushed",
-		Example: "walkline mark-pushed origin/main..HEAD",
-		Args:    cobra.ExactArgs(1),
+		Example: "walkline mark-pushed (auto-detect) or walkline mark-pushed origin/main..HEAD",
+		Args:    cobra.RangeArgs(0, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := store.New()
 			if err != nil {
@@ -104,7 +104,18 @@ func MarkPushedCmd() *cobra.Command {
 			}
 			defer s.Close()
 
-			hashes, err := resolvePushRange(".", args[0])
+			ref := "HEAD"
+			if len(args) > 0 {
+				ref = args[0]
+			} else {
+				// Auto-detect: try upstream, fallback to HEAD
+				upstream, err := runGit(".", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+				if err == nil && strings.TrimSpace(upstream) != "" {
+					ref = strings.TrimSpace(upstream) + "..HEAD"
+				}
+			}
+
+			hashes, err := resolvePushRange(".", ref)
 			if err != nil {
 				return fmt.Errorf("resolve range: %w", err)
 			}
