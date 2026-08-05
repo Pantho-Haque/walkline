@@ -72,15 +72,15 @@ trap 'rm -rf "$tmpdir"' EXIT
 # Download release
 echo "Downloading ${archive_name}..."
 cd "$tmpdir"
-curl -fsSL -o "release${ext}" "https://github.com/${OWNER}/${REPO}/releases/download/${VERSION}/${archive_name}"
+curl -fsSL -o "${archive_name}" "https://github.com/${OWNER}/${REPO}/releases/download/${VERSION}/${archive_name}"
 curl -fsSL -o checksums.txt "https://github.com/${OWNER}/${REPO}/releases/download/${VERSION}/checksums.txt"
 
 # Verify checksum
 echo "Verifying checksum..."
 if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum --check checksums.txt --status
+  grep " ${archive_name}$" checksums.txt | sha256sum --check --status
 elif command -v shasum >/dev/null 2>&1; then
-  shasum -a 256 --check checksums.txt --status
+  grep " ${archive_name}$" checksums.txt | shasum -a 256 --check --status
 else
   echo "Error: Neither sha256sum nor shasum available for verification" >&2
   exit 1
@@ -88,8 +88,8 @@ fi
 
 # Extract
 echo "Extracting..."
-tar xzf "release${ext}"
-rm "release${ext}" checksums.txt
+tar xzf "${archive_name}"
+rm "${archive_name}" checksums.txt
 
 # Determine install location
 if [ -w /usr/local/bin ]; then
