@@ -35,7 +35,7 @@ jobs:
             ext=".exe"
           fi
           name="walkline_${GITHUB_REF#refs/tags/v}_${GOOS}_${GOARCH}${ext}"
-          CGO_ENABLED=1 go build -ldflags="-s -w" -o "$name" ./cmd/walkline
+          CGO_ENABLED=0 go build -ldflags="-s -w" -o "$name" ./cmd/walkline
 
       - name: Package
         env:

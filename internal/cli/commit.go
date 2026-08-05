@@ -52,7 +52,7 @@ func getCommitInfo(repoPath string) (*store.Commit, error) {
 	}
 	commit.AuthorEmail = strings.TrimSpace(authorEmail)
 
-	message, err := runGit(repoPath, "log", "-1", "--format=%s")
+	message, err := runGit(repoPath, "log", "-1", "--format=%B")
 	if err != nil {
 		return nil, fmt.Errorf("git log message: %w", err)
 	}
