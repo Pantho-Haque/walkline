@@ -44,9 +44,11 @@ jobs:
         run: |
           base="walkline_${GITHUB_REF#refs/tags/v}_${GOOS}_${GOARCH}"
           if [ "$GOOS" = "windows" ]; then
-            zip "${base}.zip" "${base}.exe"
+            mv "${base}.exe" walkline.exe
+            zip "${base}.zip" walkline.exe
           else
-            tar czf "${base}.tar.gz" "${base}"
+            mv "${base}" walkline
+            tar czf "${base}.tar.gz" walkline
           fi
 
       - name: Upload build artifact
