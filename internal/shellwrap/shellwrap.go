@@ -11,6 +11,8 @@ const wrapperBash = `
 # walkline git wrapper - paste this into your .bashrc or .zshrc
 git() {
     if [ "$1" = "push" ]; then
+        # Ensure walkline is in PATH
+        export PATH="$HOME/.local/bin:$PATH"
         # Capture range BEFORE push (remote ref updates after push completes)
         local range
         range=$(command git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1 \
@@ -31,6 +33,8 @@ const wrapperZsh = `
 # walkline git wrapper - paste this into your .bashrc or .zshrc
 git() {
     if [[ "$1" = "push" ]]; then
+        # Ensure walkline is in PATH
+        export PATH="$HOME/.local/bin:$PATH"
         # Capture range BEFORE push (remote ref updates after push completes)
         local wl_range
         if command git rev-parse --abbrev-ref --symbolic-full-name "@{u}" >/dev/null 2>&1; then
