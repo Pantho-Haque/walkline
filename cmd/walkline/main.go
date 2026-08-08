@@ -9,6 +9,8 @@ import (
 
 func main() {
 	root := &cobra.Command{Use: "walkline"}
+	root.SetVersionTemplate("{{.Version}}\n")
+	root.Version = cli.Version
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		cli.CheckForUpdate()
 		return nil
@@ -22,6 +24,7 @@ func main() {
 	root.AddCommand(cli.UninstallCmd())
 	root.AddCommand(cli.UpdateCmd())
 	root.AddCommand(cli.SyncCmd())
+	root.AddCommand(cli.VersionCmd())
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}
