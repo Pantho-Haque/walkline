@@ -12,6 +12,7 @@ type ScanResults struct {
 	Merged     int
 	NoOp       int
 	MergedPaths []string
+	Repos      []string
 }
 
 type Scanner struct {
@@ -47,6 +48,7 @@ func (s *Scanner) Scan() (*ScanResults, error) {
 		}
 
 		results.Total++
+		results.Repos = append(results.Repos, path)
 
 		postCommitPath := filepath.Join(gitDir, "hooks", "post-commit")
 		status, err := InstallHook(postCommitPath)

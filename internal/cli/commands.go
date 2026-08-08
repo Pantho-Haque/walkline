@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -31,7 +30,8 @@ func InstallCmd() *cobra.Command {
 
 			fmt.Println("NOTE: This does NOT affect existing repos. Run 'walkline scan <root>' to")
 			fmt.Println("      instrument existing repos (see 'walkline scan --help' for details).")
-			return nil
+			fmt.Println("\nRunning auto-sync on existing repos...")
+			return runAutoSync()
 		},
 	}
 }
@@ -221,112 +221,5 @@ func UninstallCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&includeDB, "include-db", false, "Also remove the database at ~/.walkline")
-	return cmd
-}
-
-func UpdateCmd() *cobra.Command {
-	cmd := &cobra.Command{
-		Use:     "update",
-		Short:   "Update walkline to the latest version",
-		Example: "walkline update",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			// Find current binary path
-			execPath, err := os.Executable()
-			if err != nil {
-				return fmt.Errorf("could not find current binary: %w", err)
-			}
-
-			fmt.Println("Downloading latest release...")
-			version := "latest"
-			// Resolve latest version
-			c := exec.Command("curl", "-fsSL", "https://api.github.com/repos/Pantho-Haque/walkline/releases/latest")
-			out, err := c.Output()
-			if err == nil {
-				lines := strings.Split(string(out), "\n")
-				for _, line := range lines {
-					if strings.Contains(line, `"tag_name"`) {
-						version = strings.Split(line, `"`)[3]
-						break
-					}
-				}
-			}
-
-			// Detect OS and arch
-			osName := strings.ToLower(func() string {
-				out, _ := exec.Command("uname", "-s").Output()
-				s := strings.TrimSpace(string(out))
-				if s == "Darwin" {
-					return "darwin"
-				}
-				return s
-			}())
-
-			arch := strings.ToLower(func() string {
-				out, _ := exec.Command("uname", "-m").Output()
-				s := strings.TrimSpace(string(out))
-				if s == "x86_64" {
-					return "amd64"
-				}
-				if s == "arm64" || s == "aarch64" {
-					return "arm64"
-				}
-				return s
-			}())
-
-			ext := ".tar.gz"
-			if osName == "windows" {
-				ext = ".zip"
-			}
-			archiveName := fmt.Sprintf("walkline_%s_%s_%s%s", strings.TrimPrefix(version, "v"), osName, arch, ext)
-			binaryName := "walkline"
-			if osName == "windows" {
-				binaryName = "walkline.exe"
-			}
-
-			tmpdir, err := os.MkdirTemp("", "walkline-update")
-			if err != nil {
-				return fmt.Errorf("could not create temp dir: %w", err)
-			}
-			defer os.RemoveAll(tmpdir)
-
-			// Download
-			downloadURL := fmt.Sprintf("https://github.com/Pantho-Haque/walkline/releases/download/%s/%s", version, archiveName)
-			fmt.Printf("Downloading %s...\n", downloadURL)
-			c = exec.Command("curl", "-fsSL", "-o", filepath.Join(tmpdir, archiveName), downloadURL)
-			if err := c.Run(); err != nil {
-				return fmt.Errorf("download failed: %w", err)
-			}
-
-			// Extract
-			if ext == ".tar.gz" {
-				c = exec.Command("tar", "xzf", archiveName, "-C", tmpdir)
-			} else {
-				c = exec.Command("unzip", "-o", archiveName, "-d", tmpdir)
-			}
-			c.Dir = tmpdir
-			if err := c.Run(); err != nil {
-				return fmt.Errorf("extraction failed: %w", err)
-			}
-
-			// Replace binary
-			newBinary := filepath.Join(tmpdir, binaryName)
-			src, err := os.Open(newBinary)
-			if err != nil {
-				return fmt.Errorf("could not open new binary: %w", err)
-			}
-			defer src.Close()
-			dst, err := os.OpenFile(execPath, os.O_WRONLY|os.O_TRUNC, 0755)
-			if err != nil {
-				return fmt.Errorf("could not open target binary: %w", err)
-			}
-			defer dst.Close()
-			if _, err := io.Copy(dst, src); err != nil {
-				return fmt.Errorf("failed to replace binary: %w", err)
-			}
-
-			fmt.Printf("Updated walkline to %s\n", version)
-			return nil
-		},
-	}
 	return cmd
 }

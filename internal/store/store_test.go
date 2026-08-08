@@ -351,6 +351,109 @@ func TestSyncIntegration(t *testing.T) {
 	}
 }
 
+func TestDeleteOrphans(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "test.db")
+
+	db, err := openDB(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	commits := []Commit{
+		{Hash: "h1", ProjectName: "p1", ProjectPath: "/proj1", CommittedAt: "2024-01-01T12:00:00Z"},
+		{Hash: "h2", ProjectName: "p1", ProjectPath: "/proj1", CommittedAt: "2024-01-01T12:01:00Z"},
+		{Hash: "h3", ProjectName: "p1", ProjectPath: "/proj1", CommittedAt: "2024-01-01T12:02:00Z"},
+		{Hash: "orphan1", ProjectName: "p1", ProjectPath: "/proj1", CommittedAt: "2024-01-01T12:03:00Z"},
+		{Hash: "orphan2", ProjectName: "p1", ProjectPath: "/proj1", CommittedAt: "2024-01-01T12:04:00Z"},
+	}
+	for _, c := range commits {
+		if err := db.InsertCommit(&c); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	deleted, err := db.DeleteOrphans("/proj1", []string{"h1", "h2", "h3"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted != 2 {
+		t.Errorf("expected 2 deleted, got %d", deleted)
+	}
+
+	remaining, err := db.QueryCommits(CommitFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(remaining) != 3 {
+		t.Errorf("expected 3 remaining, got %d", len(remaining))
+	}
+	hashes := make(map[string]bool)
+	for _, c := range remaining {
+		hashes[c.Hash] = true
+	}
+	if !hashes["h1"] || !hashes["h2"] || !hashes["h3"] {
+		t.Error("valid commits should still exist")
+	}
+	if hashes["orphan1"] || hashes["orphan2"] {
+		t.Error("orphans should have been deleted")
+	}
+}
+
+func TestDeleteOrphansEmpty(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "test.db")
+
+	db, err := openDB(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = db.DeleteOrphans("/proj1", []string{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	all, err := db.QueryCommits(CommitFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 0 {
+		t.Errorf("expected 0 commits, got %d", len(all))
+	}
+}
+
+func TestDeleteOrphansNoMatch(t *testing.T) {
+	tmp := t.TempDir()
+	dbPath := filepath.Join(tmp, "test.db")
+
+	db, err := openDB(dbPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	commit := &Commit{Hash: "h1", ProjectName: "p1", ProjectPath: "/proj1", CommittedAt: "2024-01-01T12:00:00Z"}
+	if err := db.InsertCommit(commit); err != nil {
+		t.Fatal(err)
+	}
+
+	deleted, err := db.DeleteOrphans("/proj1", []string{"different", "hashes"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if deleted != 1 {
+		t.Errorf("expected 1 deleted, got %d", deleted)
+	}
+
+	all, err := db.QueryCommits(CommitFilter{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(all) != 0 {
+		t.Errorf("expected 0 commits, got %d", len(all))
+	}
+}
+
 func TestQueryCommitsDateFilter(t *testing.T) {
 	tmp := t.TempDir()
 	dbPath := filepath.Join(tmp, "test.db")

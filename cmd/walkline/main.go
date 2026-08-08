@@ -9,6 +9,10 @@ import (
 
 func main() {
 	root := &cobra.Command{Use: "walkline"}
+	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		cli.CheckForUpdate()
+		return nil
+	}
 	root.AddCommand(cli.LogCommitCmd())
 	root.AddCommand(cli.MarkPushedCmd())
 	root.AddCommand(cli.ReportCmd())
