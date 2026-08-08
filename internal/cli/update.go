@@ -136,22 +136,28 @@ func runAutoSync() error {
 
 	scanner := hooks.NewScanner(home, 2)
 	results, err := scanner.Scan()
-	if err != nil {
-		fmt.Printf("Auto-sync scan warning: %v\n", err)
+	if results == nil {
+		return nil
 	}
 
 	synced := 0
-	failed := 0
+	skipped := 0
 
+	fmt.Println("Syncing repos:")
 	for _, repoPath := range results.Repos {
 		if err := syncRepo(repoPath); err != nil {
-			failed++
+			skipped++
 			continue
 		}
 		synced++
+		fmt.Printf("  %s\n", repoPath)
 	}
 
-	fmt.Printf("Auto-sync complete: %d repos synced, %d failed (no upstream or permission)\n", synced, failed)
+	if skipped > 0 {
+		fmt.Printf("Auto-sync complete: %d synced, %d skipped (no upstream or permission)\n", synced, skipped)
+	} else {
+		fmt.Printf("Auto-sync complete: %d repos synced\n", synced)
+	}
 	return nil
 }
 
