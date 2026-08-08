@@ -59,6 +59,10 @@ func runSync(s *store.Store, projectFilter string) error {
 }
 
 func syncProject(s *store.Store, projectPath string) (int, error) {
+	if err := cleanupOrphans(s, projectPath); err != nil {
+		fmt.Printf("  orphan cleanup warning for %s: %v\n", projectPath, err)
+	}
+
 	upstream, err := runGit(projectPath, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
 	if err != nil {
 		return 0, fmt.Errorf("no upstream configured")

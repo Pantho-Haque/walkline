@@ -26,7 +26,10 @@ func LogCommitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return s.InsertCommit(commit)
+			if err := s.InsertCommit(commit); err != nil {
+				return err
+			}
+			return cleanupOrphans(s, ".")
 		},
 	}
 }
@@ -89,6 +92,29 @@ func runGit(repoPath string, args ...string) (string, error) {
 		return "", err
 	}
 	return string(out), nil
+}
+
+func cleanupOrphans(s *store.Store, repoPath string) error {
+	reachable, err := runGit(repoPath, "rev-list", "HEAD")
+	if err != nil {
+		return err
+	}
+	hashes := strings.Split(strings.TrimSpace(reachable), "\n")
+	var valid []string
+	for _, h := range hashes {
+		h = strings.TrimSpace(h)
+		if h != "" {
+			valid = append(valid, h)
+		}
+	}
+	deleted, err := s.DeleteOrphans(repoPath, valid)
+	if err != nil {
+		return err
+	}
+	if deleted > 0 {
+		fmt.Printf("Cleaned up %d orphaned commit(s)\n", deleted)
+	}
+	return nil
 }
 
 func MarkPushedCmd() *cobra.Command {

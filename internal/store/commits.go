@@ -172,3 +172,63 @@ func (s *Store) GetPendingHashes(projectPath string) ([]string, error) {
 	}
 	return hashes, rows.Err()
 }
+
+func (s *Store) GetHashesForProject(projectPath string) ([]string, error) {
+	rows, err := s.db.Query("SELECT hash FROM commits WHERE project_path = ?", projectPath)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var hashes []string
+	for rows.Next() {
+		var h string
+		if err := rows.Scan(&h); err != nil {
+			return nil, err
+		}
+		hashes = append(hashes, h)
+	}
+	return hashes, rows.Err()
+}
+
+func (s *Store) DeleteOrphans(projectPath string, validHashes []string) (int, error) {
+	if len(validHashes) == 0 {
+		return 0, nil
+	}
+	validSet := make(map[string]bool, len(validHashes))
+	for _, h := range validHashes {
+		validSet[h] = true
+	}
+	storedHashes, err := s.GetHashesForProject(projectPath)
+	if err != nil {
+		return 0, err
+	}
+	var toDelete []string
+	for _, h := range storedHashes {
+		if !validSet[h] {
+			toDelete = append(toDelete, h)
+		}
+	}
+	if len(toDelete) == 0 {
+		return 0, nil
+	}
+	tx, err := s.db.Begin()
+	if err != nil {
+		return 0, err
+	}
+	stmt, err := tx.Prepare("DELETE FROM commits WHERE hash = ?")
+	if err != nil {
+		tx.Rollback()
+		return 0, err
+	}
+	defer stmt.Close()
+	deleted := 0
+	for _, h := range toDelete {
+		_, err := stmt.Exec(h)
+		if err != nil {
+			tx.Rollback()
+			return 0, err
+		}
+		deleted++
+	}
+	return deleted, tx.Commit()
+}
