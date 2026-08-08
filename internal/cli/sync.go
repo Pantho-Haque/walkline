@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -59,6 +60,9 @@ func runSync(s *store.Store, projectFilter string) error {
 }
 
 func syncProject(s *store.Store, projectPath string) (int, error) {
+	if _, err := os.Stat(projectPath); os.IsNotExist(err) {
+		return 0, nil
+	}
 	if err := cleanupOrphans(s, projectPath); err != nil {
 		fmt.Printf("  orphan cleanup warning for %s: %v\n", projectPath, err)
 	}

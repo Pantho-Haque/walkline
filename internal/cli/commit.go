@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -100,6 +101,9 @@ func runGit(repoPath string, args ...string) (string, error) {
 }
 
 func cleanupOrphans(s *store.Store, repoPath string) error {
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return nil
+	}
 	reachable, err := runGit(repoPath, "rev-list", "HEAD")
 	if err != nil {
 		return err
