@@ -156,6 +156,23 @@ func (s *Store) GetPendingProjects() ([]string, error) {
 	return paths, rows.Err()
 }
 
+func (s *Store) GetPathsByProjectName(name string) ([]string, error) {
+	rows, err := s.db.Query("SELECT DISTINCT project_path FROM commits WHERE project_name = ?", name)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var paths []string
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	return paths, rows.Err()
+}
+
 func (s *Store) GetPendingHashes(projectPath string) ([]string, error) {
 	rows, err := s.db.Query("SELECT hash FROM commits WHERE pushed = 0 AND project_path = ?", projectPath)
 	if err != nil {

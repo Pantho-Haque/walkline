@@ -34,7 +34,11 @@ func SyncCmd() *cobra.Command {
 func runSync(s *store.Store, projectFilter string) error {
 	var projectPaths []string
 	if projectFilter != "" {
-		projectPaths = []string{projectFilter}
+		paths, err := s.GetPathsByProjectName(projectFilter)
+		if err != nil {
+			return err
+		}
+		projectPaths = paths
 	} else {
 		paths, err := s.GetPendingProjects()
 		if err != nil {
