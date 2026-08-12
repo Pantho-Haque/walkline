@@ -11,12 +11,8 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"walkline/internal/hooks"
-	"walkline/internal/store"
-)
-
-var (
-	Version = "dev"
+	"walkline/internal/constants"
+	"walkline/internal/sync"
 )
 
 func UpdateCmd() *cobra.Command {
@@ -29,7 +25,7 @@ func UpdateCmd() *cobra.Command {
 				return err
 			}
 			fmt.Println("\nRunning auto-sync...")
-			return runAutoSync()
+			return sync.AutoSync(constants.DataDir())
 		},
 	}
 	return cmd
@@ -47,15 +43,14 @@ func doUpdate() error {
 		fmt.Printf("Warning: could not check for updates: %v\n", err)
 		latestVersion = ""
 	}
-
 	latestVersion = strings.TrimPrefix(latestVersion, "v")
 
 	osName := strings.ToLower(runtime.GOOS)
 	arch := strings.ToLower(runtime.GOARCH)
-	if arch == "x86_64" {
+	switch arch {
+	case "x86_64":
 		arch = "amd64"
-	}
-	if arch == "aarch64" || arch == "arm64" {
+	case "aarch64", "arm64":
 		arch = "arm64"
 	}
 
@@ -128,76 +123,8 @@ func fetchLatestVersion() (string, error) {
 	return "", fmt.Errorf("could not parse version from response")
 }
 
-func runAutoSync() error {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("could not find home directory: %w", err)
-	}
-
-	scanner := hooks.NewScanner(home, 2)
-	results, err := scanner.Scan()
-	if results == nil {
-		return nil
-	}
-
-	synced := 0
-	skipped := 0
-
-	fmt.Println("Syncing repos:")
-	for _, repoPath := range results.Repos {
-		if err := syncRepo(repoPath); err != nil {
-			skipped++
-			continue
-		}
-		synced++
-		fmt.Printf("  %s\n", repoPath)
-	}
-
-	if skipped > 0 {
-		fmt.Printf("Auto-sync complete: %d synced, %d skipped (no upstream or permission)\n", synced, skipped)
-	} else {
-		fmt.Printf("Auto-sync complete: %d repos synced\n", synced)
-	}
-	return nil
-}
-
-func syncRepo(repoPath string) error {
-	s, err := store.New()
-	if err != nil {
-		return err
-	}
-	defer s.Close()
-
-	upstream, err := runGit(repoPath, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
-	if err != nil {
-		return err
-	}
-	upstream = strings.TrimSpace(upstream)
-
-	hashes, err := s.GetPendingHashes(repoPath)
-	if err != nil {
-		return err
-	}
-
-	var toMark []string
-	for _, h := range hashes {
-		isAncestor, err := gitIsAncestor(repoPath, h, upstream)
-		if err != nil {
-			continue
-		}
-		if isAncestor {
-			toMark = append(toMark, h)
-		}
-	}
-
-	if len(toMark) > 0 {
-		return s.MarkPushed(toMark)
-	}
-	return nil
-}
-
 func CheckForUpdate() {
-	if Version == "dev" {
+	if constants.Version == "dev" {
 		return
 	}
 
@@ -210,21 +137,21 @@ func CheckForUpdate() {
 	}
 
 	latest = strings.TrimPrefix(latest, "v")
-	if latest == "" || latest == Version {
+	if latest == "" || latest == constants.Version {
 		return
 	}
 
-	fmt.Printf("\n" +
-		"╔══════════════════════════════════════════════════════════════╗\n" +
-		"║  A new version '%s' is available.                          ║\n"+
-		"║  You have '%s'.                                              ║\n"+
-		"║  Run 'walkline update' to upgrade.                          ║\n"+
-		"╚══════════════════════════════════════════════════════════════╝\n",
-		latest, Version)
+	fmt.Printf(`
+╔══════════════════════════════════════════════════════════════╗
+║  A new version '%s' is available.                          ║
+║  You have '%s'.                                              ║
+║  Run 'walkline update' to upgrade.                          ║
+╚══════════════════════════════════════════════════════════════╝
+`, latest, constants.Version)
 }
 
 func getCachedLatestVersion() (string, bool, error) {
-	configDir := filepath.Join(osUserHomeDir(), ".walkline")
+	configDir := constants.DataDir()
 	lastCheckFile := filepath.Join(configDir, ".last_update_check")
 	versionFile := filepath.Join(configDir, ".latest_version")
 
@@ -249,9 +176,4 @@ func getCachedLatestVersion() (string, bool, error) {
 	os.WriteFile(versionFile, []byte(latest), 0644)
 
 	return latest, true, nil
-}
-
-func osUserHomeDir() string {
-	home, _ := os.UserHomeDir()
-	return home
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"walkline/internal/constants"
 )
 
 func VersionCmd() *cobra.Command {
@@ -12,7 +13,7 @@ func VersionCmd() *cobra.Command {
 		Short: "Print version",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			fmt.Println(Version)
+			fmt.Println(constants.Version)
 			return nil
 		},
 	}

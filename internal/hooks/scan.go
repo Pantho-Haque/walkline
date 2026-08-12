@@ -42,7 +42,7 @@ func (s *Scanner) Scan() (*ScanResults, error) {
 			return nil
 		}
 
-		gitDir := findGitDir(path, info)
+		gitDir := findGitDir(path)
 		if gitDir == "" {
 			return nil
 		}
@@ -89,7 +89,7 @@ func (s *Scanner) Scan() (*ScanResults, error) {
 	return &results, nil
 }
 
-func findGitDir(path string, info os.FileInfo) string {
+func findGitDir(path string) string {
 	gitFolder := filepath.Join(path, ".git")
 	gitFile := filepath.Join(path, ".git")
 

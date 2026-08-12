@@ -5,12 +5,13 @@ import (
 
 	"github.com/spf13/cobra"
 	"walkline/internal/cli"
+	"walkline/internal/constants"
 )
 
 func main() {
 	root := &cobra.Command{Use: "walkline"}
 	root.SetVersionTemplate("{{.Version}}\n")
-	root.Version = cli.Version
+	root.Version = constants.Version
 	root.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 		cli.CheckForUpdate()
 		return nil

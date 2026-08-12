@@ -3,11 +3,11 @@ package cli
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/spf13/cobra"
+	"walkline/internal/shared"
 	"walkline/internal/store"
+	"walkline/internal/sync"
 )
 
 func SyncCmd() *cobra.Command {
@@ -23,7 +23,6 @@ func SyncCmd() *cobra.Command {
 				return err
 			}
 			defer s.Close()
-
 			return runSync(s, project)
 		},
 	}
@@ -49,12 +48,17 @@ func runSync(s *store.Store, projectFilter string) error {
 
 	synced := 0
 	for _, projectPath := range projectPaths {
-		n, err := syncProject(s, projectPath)
-		if err != nil {
+		if _, err := os.Stat(projectPath); os.IsNotExist(err) {
+			continue
+		}
+		if err := cleanupOrphans(s, projectPath); err != nil {
+			fmt.Printf("  orphan cleanup warning for %s: %v\n", projectPath, err)
+		}
+		if err := sync.SyncRepo(s, projectPath); err != nil {
 			fmt.Printf("  sync %s: %v (skipped)\n", projectPath, err)
 			continue
 		}
-		synced += n
+		synced++
 	}
 
 	if synced > 0 {
@@ -63,56 +67,20 @@ func runSync(s *store.Store, projectFilter string) error {
 	return nil
 }
 
-func syncProject(s *store.Store, projectPath string) (int, error) {
-	if _, err := os.Stat(projectPath); os.IsNotExist(err) {
-		return 0, nil
+func cleanupOrphans(s *store.Store, repoPath string) error {
+	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+		return nil
 	}
-	if err := cleanupOrphans(s, projectPath); err != nil {
-		fmt.Printf("  orphan cleanup warning for %s: %v\n", projectPath, err)
-	}
-
-	upstream, err := runGit(projectPath, "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+	reachable, err := shared.RunGitLines(repoPath, "rev-list", "HEAD")
 	if err != nil {
-		return 0, fmt.Errorf("no upstream configured")
+		return err
 	}
-	upstream = strings.TrimSpace(upstream)
-
-	hashes, err := s.GetPendingHashes(projectPath)
+	deleted, err := s.DeleteOrphans(repoPath, reachable)
 	if err != nil {
-		return 0, err
+		return err
 	}
-	if len(hashes) == 0 {
-		return 0, nil
+	if deleted > 0 {
+		fmt.Printf("Cleaned up %d orphaned commit(s)\n", deleted)
 	}
-
-	var toMark []string
-	for _, h := range hashes {
-		isAncestor, err := gitIsAncestor(projectPath, h, upstream)
-		if err != nil {
-			continue
-		}
-		if isAncestor {
-			toMark = append(toMark, h)
-		}
-	}
-
-	if len(toMark) > 0 {
-		if err := s.MarkPushed(toMark); err != nil {
-			return 0, err
-		}
-	}
-	return len(toMark), nil
-}
-
-func gitIsAncestor(repoPath, commit, rev string) (bool, error) {
-	cmd := exec.Command("git", "merge-base", "--is-ancestor", commit, rev)
-	cmd.Dir = repoPath
-	err := cmd.Run()
-	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
+	return nil
 }

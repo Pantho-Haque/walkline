@@ -2,19 +2,18 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"walkline/internal/shared"
 	"walkline/internal/store"
 )
 
 func LogCommitCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "log-commit",
-		Short:   "Record a commit to the database",
+		Short:   "Record commits to the database",
 		Example: "walkline log-commit",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			s, err := store.New()
@@ -30,7 +29,7 @@ func LogCommitCmd() *cobra.Command {
 			if err := s.InsertCommit(commit); err != nil {
 				return err
 			}
-			return cleanupOrphans(s, commit.ProjectPath)
+			return nil
 		},
 	}
 }
@@ -38,42 +37,42 @@ func LogCommitCmd() *cobra.Command {
 func getCommitInfo(repoPath string) (*store.Commit, error) {
 	commit := &store.Commit{ProjectPath: repoPath}
 
-	absPath, err := runGit(repoPath, "rev-parse", "--show-toplevel")
+	absPath, err := shared.RunGit(repoPath, "rev-parse", "--show-toplevel")
 	if err == nil {
 		commit.ProjectPath = strings.TrimSpace(absPath)
 	}
 
-	hash, err := runGit(repoPath, "log", "-1", "--format=%H")
+	hash, err := shared.RunGit(repoPath, "log", "-1", "--format=%H")
 	if err != nil {
 		return nil, fmt.Errorf("git log: %w", err)
 	}
 	commit.Hash = strings.TrimSpace(hash)
 
-	authorName, err := runGit(repoPath, "log", "-1", "--format=%an")
+	authorName, err := shared.RunGit(repoPath, "log", "-1", "--format=%an")
 	if err != nil {
 		return nil, fmt.Errorf("git log author: %w", err)
 	}
 	commit.AuthorName = strings.TrimSpace(authorName)
 
-	authorEmail, err := runGit(repoPath, "log", "-1", "--format=%ae")
+	authorEmail, err := shared.RunGit(repoPath, "log", "-1", "--format=%ae")
 	if err != nil {
 		return nil, fmt.Errorf("git log email: %w", err)
 	}
 	commit.AuthorEmail = strings.TrimSpace(authorEmail)
 
-	message, err := runGit(repoPath, "log", "-1", "--format=%B")
+	message, err := shared.RunGit(repoPath, "log", "-1", "--format=%B")
 	if err != nil {
 		return nil, fmt.Errorf("git log message: %w", err)
 	}
 	commit.Message = strings.TrimSpace(message)
 
-	committedAt, err := runGit(repoPath, "log", "-1", "--format=%aI")
+	committedAt, err := shared.RunGit(repoPath, "log", "-1", "--format=%aI")
 	if err != nil {
 		return nil, fmt.Errorf("git log date: %w", err)
 	}
 	commit.CommittedAt = strings.TrimSpace(committedAt)
 
-	remoteURL, _ := runGit(repoPath, "remote", "get-url", "origin")
+	remoteURL, _ := shared.RunGit(repoPath, "remote", "get-url", "origin")
 	remoteURL = strings.TrimSpace(remoteURL)
 	commit.RemoteURL = remoteURL
 
@@ -82,48 +81,12 @@ func getCommitInfo(repoPath string) (*store.Commit, error) {
 		name := parts[len(parts)-1]
 		commit.ProjectName = strings.TrimSuffix(name, ".git")
 	} else {
-		repoRoot, _ := runGit(repoPath, "rev-parse", "--show-toplevel")
+		repoRoot, _ := shared.RunGit(repoPath, "rev-parse", "--show-toplevel")
 		repoRoot = strings.TrimSpace(repoRoot)
 		commit.ProjectName = filepath.Base(repoRoot)
 	}
 
 	return commit, nil
-}
-
-func runGit(repoPath string, args ...string) (string, error) {
-	cmd := exec.Command("git", args...)
-	cmd.Dir = repoPath
-	out, err := cmd.Output()
-	if err != nil {
-		return "", err
-	}
-	return string(out), nil
-}
-
-func cleanupOrphans(s *store.Store, repoPath string) error {
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		return nil
-	}
-	reachable, err := runGit(repoPath, "rev-list", "HEAD")
-	if err != nil {
-		return err
-	}
-	hashes := strings.Split(strings.TrimSpace(reachable), "\n")
-	var valid []string
-	for _, h := range hashes {
-		h = strings.TrimSpace(h)
-		if h != "" {
-			valid = append(valid, h)
-		}
-	}
-	deleted, err := s.DeleteOrphans(repoPath, valid)
-	if err != nil {
-		return err
-	}
-	if deleted > 0 {
-		fmt.Printf("Cleaned up %d orphaned commit(s)\n", deleted)
-	}
-	return nil
 }
 
 func MarkPushedCmd() *cobra.Command {
@@ -149,7 +112,7 @@ func MarkPushedCmd() *cobra.Command {
 				ref = args[0]
 			} else {
 				ref = "HEAD"
-				upstream, err := runGit(".", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
+				upstream, err := shared.RunGit(".", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}")
 				if err == nil && strings.TrimSpace(upstream) != "" {
 					ref = strings.TrimSpace(upstream) + "..HEAD"
 				}
@@ -171,20 +134,5 @@ func MarkPushedCmd() *cobra.Command {
 }
 
 func resolvePushRange(repoPath, refSpec string) ([]string, error) {
-	hashes, err := runGit(repoPath, "rev-list", refSpec)
-	if err != nil {
-		return nil, err
-	}
-	if hashes == "" {
-		return []string{}, nil
-	}
-	lines := strings.Split(strings.TrimSpace(hashes), "\n")
-	result := make([]string, 0, len(lines))
-	for _, h := range lines {
-		h = strings.TrimSpace(h)
-		if h != "" {
-			result = append(result, h)
-		}
-	}
-	return result, nil
+	return shared.RunGitLines(repoPath, "rev-list", refSpec)
 }

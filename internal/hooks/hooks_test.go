@@ -102,7 +102,7 @@ echo "my custom pre-push"
 	if !strings.Contains(string(content), "my custom pre-push") {
 		t.Error("existing custom hook content should be preserved")
 	}
-	if !strings.Contains(string(content), prePushMarker) {
+	if !strings.Contains(string(content), PrePushHookMarker()) {
 		t.Error("walkline pre-push marker should be appended")
 	}
 }
@@ -123,7 +123,7 @@ walkline log-commit
 		t.Fatal(err)
 	}
 
-	prePushHook := "#!/bin/sh\n" + prePushHookContent
+	prePushHook := "#!/bin/sh\n" + PrePushHook()
 	if err := os.WriteFile(filepath.Join(hookDir, "pre-push"), []byte(prePushHook), 0755); err != nil {
 		t.Fatal(err)
 	}

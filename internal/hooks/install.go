@@ -6,14 +6,7 @@ import (
 	"strings"
 )
 
-type HookStatus int
-
-const (
-	HookFresh HookStatus = iota
-	HookMerged
-	HookNoOp
-)
-
+// InstallHook installs the post-commit hook at the given path.
 func InstallHook(hookPath string) (HookStatus, error) {
 	dir := filepath.Dir(hookPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -22,7 +15,7 @@ func InstallHook(hookPath string) (HookStatus, error) {
 
 	fi, err := os.Stat(hookPath)
 	if os.IsNotExist(err) {
-		if err := os.WriteFile(hookPath, []byte(hookContent), 0755); err != nil {
+		if err := os.WriteFile(hookPath, []byte(PostCommitHook()), 0755); err != nil {
 			return 0, err
 		}
 		return HookFresh, nil
@@ -43,6 +36,7 @@ func InstallHook(hookPath string) (HookStatus, error) {
 	return HookMerged, appendToHook(hookPath, string(content), fi.Mode())
 }
 
+// InstallPrePushHook installs the pre-push hook at the given path.
 func InstallPrePushHook(hookPath string) (HookStatus, error) {
 	dir := filepath.Dir(hookPath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
@@ -51,7 +45,7 @@ func InstallPrePushHook(hookPath string) (HookStatus, error) {
 
 	fi, err := os.Stat(hookPath)
 	if os.IsNotExist(err) {
-		if err := os.WriteFile(hookPath, []byte(prePushHookContent), 0755); err != nil {
+		if err := os.WriteFile(hookPath, []byte(PrePushHook()), 0755); err != nil {
 			return 0, err
 		}
 		return HookFresh, nil
@@ -65,11 +59,11 @@ func InstallPrePushHook(hookPath string) (HookStatus, error) {
 		return 0, err
 	}
 
-	if strings.Contains(string(content), prePushMarker) {
+	if strings.Contains(string(content), PrePushHookMarker()) {
 		return HookNoOp, nil
 	}
 
-	return HookMerged, appendToPrePushHook(hookPath, string(content), fi.Mode())
+	return HookMerged, appendPrePushHook(hookPath, string(content), fi.Mode())
 }
 
 func appendToHook(hookPath, existingContent string, mode os.FileMode) error {
@@ -77,7 +71,7 @@ func appendToHook(hookPath, existingContent string, mode os.FileMode) error {
 	return os.WriteFile(hookPath, []byte(merged), mode)
 }
 
-func appendToPrePushHook(hookPath, existingContent string, mode os.FileMode) error {
-	merged := existingContent + "\n" + prePushHookBody
+func appendPrePushHook(hookPath, existingContent string, mode os.FileMode) error {
+	merged := existingContent + "\n" + PrePushHook()
 	return os.WriteFile(hookPath, []byte(merged), mode)
 }
