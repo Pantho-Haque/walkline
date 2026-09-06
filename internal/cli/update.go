@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,22 +87,43 @@ func doUpdate() error {
 	}
 
 	newBinary := filepath.Join(tmpdir, binaryName)
-	src, err := os.Open(newBinary)
-	if err != nil {
-		return fmt.Errorf("could not open new binary: %w", err)
+
+	// Stage the new binary next to the current one (same filesystem so rename is atomic).
+	// Writing to a sibling file and renaming avoids the macOS/Linux limitation that you
+	// cannot truncate a binary's inode while it is currently executing. The running
+	// process keeps the old inode alive until exit; the new binary takes its place
+	// at the original path for all future invocations.
+	stagePath := filepath.Join(filepath.Dir(currentPath), "."+filepath.Base(currentPath)+".new")
+	if err := copyFile(newBinary, stagePath, 0755); err != nil {
+		return fmt.Errorf("stage new binary: %w", err)
 	}
-	defer src.Close()
-	dst, err := os.OpenFile(currentPath, os.O_WRONLY|os.O_TRUNC, 0755)
-	if err != nil {
-		return fmt.Errorf("could not open target binary: %w", err)
-	}
-	defer dst.Close()
-	if _, err := io.Copy(dst, src); err != nil {
+
+	if err := os.Rename(stagePath, currentPath); err != nil {
+		_ = os.Remove(stagePath)
 		return fmt.Errorf("failed to replace binary: %w", err)
 	}
 
 	fmt.Printf("Updated walkline to v%s\n", latestVersion)
 	return nil
+}
+
+func copyFile(srcPath, dstPath string, mode os.FileMode) error {
+	src, err := os.Open(srcPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	dst, err := os.OpenFile(dstPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, mode)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	if _, err := dst.ReadFrom(src); err != nil {
+		return err
+	}
+	return os.Chmod(dstPath, mode)
 }
 
 func fetchLatestVersion() (string, error) {
