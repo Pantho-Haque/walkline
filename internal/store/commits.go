@@ -2,8 +2,11 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 )
+
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
 
 type Commit struct {
 	Hash        string
@@ -57,9 +60,13 @@ type CommitFilter struct {
 	Until   string
 	At      string
 	Project string
-	Author  string
-	Pushed  *bool
-	Limit   int
+	// ProjectContains is a case-insensitive substring match on project name.
+	ProjectContains string
+	Author          string
+	Pushed          *bool
+	Limit           int
+	// Text is a case-insensitive substring match on message, hash, project, or author.
+	Text string
 }
 
 func (s *Store) QueryCommits(f CommitFilter) ([]Commit, error) {
@@ -77,10 +84,19 @@ func (s *Store) QueryCommits(f CommitFilter) ([]Commit, error) {
 		query += " AND project_name = ?"
 		args = append(args, f.Project)
 	}
+	if f.ProjectContains != "" {
+		query += " AND project_name LIKE ? ESCAPE '\\'"
+		args = append(args, "%"+likeEscaper.Replace(f.ProjectContains)+"%")
+	}
 	if f.Author != "" {
-		query += " AND (author_name LIKE ? OR author_email LIKE ?)"
-		likeAuthor := "%" + f.Author + "%"
+		query += " AND (author_name LIKE ? ESCAPE '\\' OR author_email LIKE ? ESCAPE '\\')"
+		likeAuthor := "%" + likeEscaper.Replace(f.Author) + "%"
 		args = append(args, likeAuthor, likeAuthor)
+	}
+	if f.Text != "" {
+		query += " AND (message LIKE ? ESCAPE '\\' OR hash LIKE ? ESCAPE '\\' OR project_name LIKE ? ESCAPE '\\' OR author_name LIKE ? ESCAPE '\\' OR author_email LIKE ? ESCAPE '\\')"
+		like := "%" + likeEscaper.Replace(f.Text) + "%"
+		args = append(args, like, like, like, like, like)
 	}
 	if f.Pushed != nil {
 		val := 0
@@ -190,62 +206,41 @@ func (s *Store) GetPendingHashes(projectPath string) ([]string, error) {
 	return hashes, rows.Err()
 }
 
-func (s *Store) GetHashesForProject(projectPath string) ([]string, error) {
-	rows, err := s.db.Query("SELECT hash FROM commits WHERE project_path = ?", projectPath)
+// Stats summarises the whole database, ignoring any filter.
+type Stats struct {
+	Total, Pending, Projects int
+}
+
+func (s *Store) Stats() (Stats, error) {
+	var st Stats
+	err := s.db.QueryRow("SELECT COUNT(*), COALESCE(SUM(1-pushed),0), COUNT(DISTINCT project_name) FROM commits").
+		Scan(&st.Total, &st.Pending, &st.Projects)
+	return st, err
+}
+
+// DistinctProjects returns every project name, sorted.
+func (s *Store) DistinctProjects() ([]string, error) {
+	return s.distinct("project_name")
+}
+
+// DistinctAuthors returns every author name, sorted.
+func (s *Store) DistinctAuthors() ([]string, error) {
+	return s.distinct("author_name")
+}
+
+func (s *Store) distinct(col string) ([]string, error) {
+	rows, err := s.db.Query("SELECT DISTINCT " + col + " FROM commits WHERE " + col + " <> '' ORDER BY " + col + " COLLATE NOCASE")
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var hashes []string
+	var out []string
 	for rows.Next() {
-		var h string
-		if err := rows.Scan(&h); err != nil {
+		var v string
+		if err := rows.Scan(&v); err != nil {
 			return nil, err
 		}
-		hashes = append(hashes, h)
+		out = append(out, v)
 	}
-	return hashes, rows.Err()
-}
-
-func (s *Store) DeleteOrphans(projectPath string, validHashes []string) (int, error) {
-	if len(validHashes) == 0 {
-		return 0, nil
-	}
-	validSet := make(map[string]bool, len(validHashes))
-	for _, h := range validHashes {
-		validSet[h] = true
-	}
-	storedHashes, err := s.GetHashesForProject(projectPath)
-	if err != nil {
-		return 0, err
-	}
-	var toDelete []string
-	for _, h := range storedHashes {
-		if !validSet[h] {
-			toDelete = append(toDelete, h)
-		}
-	}
-	if len(toDelete) == 0 {
-		return 0, nil
-	}
-	tx, err := s.db.Begin()
-	if err != nil {
-		return 0, err
-	}
-	stmt, err := tx.Prepare("DELETE FROM commits WHERE hash = ?")
-	if err != nil {
-		tx.Rollback()
-		return 0, err
-	}
-	defer stmt.Close()
-	deleted := 0
-	for _, h := range toDelete {
-		_, err := stmt.Exec(h)
-		if err != nil {
-			tx.Rollback()
-			return 0, err
-		}
-		deleted++
-	}
-	return deleted, tx.Commit()
+	return out, rows.Err()
 }

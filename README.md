@@ -79,6 +79,22 @@ From this point forward:
 
 ## CLI Commands
 
+### `walkline` / `walkline tui`
+Opens the interactive commit browser (needs a terminal). Newest commits first, grouped by day, with a detail pane.
+
+| Key | Action |
+|-----|--------|
+| `j`/`k`, `g`/`G`, `ctrl+d`/`ctrl+u` | move / top-bottom / half page |
+| `/` | search message, hash, project, author (live) |
+| `p` `a` `f` `t` | filter by project / author / from-date / to-date (`tab` cycles fields) |
+| `s` | status: all → pending → pushed |
+| `d` | range: today → 7d → 30d → 365d → off |
+| `x` | clear all filters |
+| `enter` | toggle details (narrow terminals) |
+| `r` | sync push status with git remotes |
+| `u` | install the latest release (shown in the header when available) |
+| `?` / `q` | help / quit |
+
 ### `walkline install`
 Sets up the global git template for future repos (post-commit and pre-push hooks) and sets up shell completion.
 
@@ -190,11 +206,12 @@ Removes:
 
 Note: Hooks already installed in individual repos are left in place (they are harmless).
 
-### `walkline update`
-Update walkline to the latest version from GitHub releases.
+### `walkline update [--check]`
+Replaces the binary with the latest **GitHub release** (checksum-verified). A locally built `dev` binary is always replaced by the newest release, so anything you change locally without releasing is overwritten by the next release tag. `--check` only reports.
 
 ```
 walkline update
+walkline update --check
 ```
 
 ### `walkline completion bash|zsh|fish|powershell`
@@ -233,7 +250,7 @@ Everything walkline installs (via `install`'s templateDir mechanism or via `scan
 ## Known Limitations
 
 ### Amended/Rebased Commits
-If you amend or rebase a commit, the hash changes. The old hash's row remains in the database as a stale orphan. No automatic cleanup is attempted.
+If you amend or rebase a commit, the hash changes. The old hash's row stays in the database: walkline never deletes recorded commits, so your history of what you committed on this machine is complete (the old row simply remains marked pending).
 
 ### Single Machine Only
 walkline is single-machine only. There is no cross-machine sync. Commits recorded on machine A are not visible on machine B.
@@ -250,12 +267,25 @@ The pre-push hook relies on git's standard stdin protocol. Highly unusual git co
 cmd/walkline/main.go      # Entry point, cobra root command
 internal/
 ├── cli/                  # Cobra command definitions
-│   ├── commands.go       # install, scan, uninstall, update
+│   ├── commands.go       # install, scan, uninstall
 │   ├── commit.go         # log-commit, mark-pushed
 │   ├── report.go         # report, export
-│   └── sync.go           # sync (reconciliation)
-├── store/                # SQLite storage layer
+│   ├── sync.go           # sync (reconciliation)
+│   ├── tui.go            # tui entry point
+│   └── update.go         # update command, update hint
+├── store/                # SQLite storage layer + filters
+├── tui/                  # Bubble Tea commit browser
+├── update/               # GitHub release check + self-update
 └── hooks/                # Git hook template and repo scanning
 install.sh                # Mac/Linux/WSL/Git-Bash installer
 install.ps1               # Windows PowerShell installer
+```
+
+## Releasing
+
+Releases are built by `.github/workflows/release.yml` when a `vX.Y.Z` tag is pushed (tests run first, the version is stamped into the binary via `-X walkline/internal/constants.Version`).
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
 ```

@@ -2,6 +2,7 @@ package sync
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	"walkline/internal/shared"
@@ -21,13 +22,22 @@ func SyncRepo(s *store.Store, repoPath string) error {
 		return err
 	}
 
+	if len(hashes) == 0 {
+		return nil
+	}
+
+	// One rev-list instead of one `merge-base --is-ancestor` process per pending commit.
+	reachable, err := shared.RunGitLines(repoPath, "rev-list", upstream)
+	if err != nil {
+		return err
+	}
+	inUpstream := make(map[string]bool, len(reachable))
+	for _, h := range reachable {
+		inUpstream[h] = true
+	}
 	var toMark []string
 	for _, h := range hashes {
-		isAncestor, err := shared.IsAncestor(repoPath, h, upstream)
-		if err != nil {
-			continue
-		}
-		if isAncestor {
+		if inUpstream[h] {
 			toMark = append(toMark, h)
 		}
 	}
@@ -36,4 +46,25 @@ func SyncRepo(s *store.Store, repoPath string) error {
 		return s.MarkPushed(toMark)
 	}
 	return nil
+}
+
+// SyncPending reconciles every project that still has pending commits, without printing.
+// It returns how many repos were reconciled and how many were skipped (missing or no upstream).
+func SyncPending(s *store.Store) (synced, skipped int, err error) {
+	paths, err := s.GetPendingProjects()
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, p := range paths {
+		if _, statErr := os.Stat(p); statErr != nil {
+			skipped++
+			continue
+		}
+		if SyncRepo(s, p) != nil {
+			skipped++
+			continue
+		}
+		synced++
+	}
+	return synced, skipped, nil
 }

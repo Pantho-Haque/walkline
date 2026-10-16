@@ -1,4 +1,4 @@
-package cli
+package store
 
 import (
 	"testing"
@@ -120,5 +120,37 @@ func TestIsBareDate(t *testing.T) {
 		if got := isBareDate(tt.input); got != tt.want {
 			t.Errorf("isBareDate(%q) = %v, want %v", tt.input, got, tt.want)
 		}
+	}
+}
+
+func TestBuildDateFilterRejectsFakeBareDates(t *testing.T) {
+	for _, bad := range []string{"abcd-ef-gh", "2024-02-30", "2024-13-01", "2024-1-01x", "yesterday", ""} {
+		if bad == "" {
+			continue
+		}
+		if _, err := BuildDateFilter(bad, "", ""); err == nil {
+			t.Errorf("since=%q: expected error", bad)
+		}
+		if _, err := BuildDateFilter("", bad, ""); err == nil {
+			t.Errorf("until=%q: expected error", bad)
+		}
+		if _, err := BuildDateFilter("", "", bad); err == nil {
+			t.Errorf("at=%q: expected error", bad)
+		}
+	}
+}
+
+func TestBuildDateFilterWindows(t *testing.T) {
+	f, err := BuildDateFilter("", "", "2026-10-16")
+	if err != nil || f.Since != "2026-10-16T00:00:00Z" || f.Until != "2026-10-16T23:59:59Z" {
+		t.Errorf("at: %+v %v", f, err)
+	}
+	f, _ = BuildDateFilter("2026-10-16T05:00:00Z", "", "")
+	if f.Since != "2026-10-16T05:00:00Z" {
+		t.Errorf("since rfc3339: %+v", f)
+	}
+	f, _ = BuildDateFilter("", "", "2026-10-16T22:15:00Z")
+	if f.Since != "2026-10-16T00:00:00Z" {
+		t.Errorf("at rfc3339 collapses to its day: %+v", f)
 	}
 }

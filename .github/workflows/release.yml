@@ -9,7 +9,18 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go vet ./...
+      - run: go test ./...
+
   build:
+    needs: test
     runs-on: ubuntu-latest
     env:
       CGO_ENABLED: "0"
@@ -25,7 +36,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version-file: go.mod
 
       - name: Build
         env:
@@ -36,7 +47,11 @@ jobs:
           ext=""
           if [ "$GOOS" = "windows" ]; then ext=".exe"; fi
           name="walkline_${VERSION#v}_${GOOS}_${GOARCH}${ext}"
-          go build -ldflags="-s -w -X walkline/internal/cli.Version=${VERSION#v}" -o "$name" ./cmd/walkline
+          go build -ldflags="-s -w -X walkline/internal/constants.Version=${VERSION#v}" -o "$name" ./cmd/walkline
+          # Smoke test: the binary we can run must report the tag it was built from (not "dev").
+          if [ "$GOOS" = "linux" ] && [ "$GOARCH" = "amd64" ]; then
+            test "$(./$name --version)" = "${VERSION#v}"
+          fi
 
       - name: Package
         env:
@@ -76,8 +91,9 @@ jobs:
         run: sha256sum walkline_*.tar.gz walkline_*.zip > checksums.txt
 
       - name: Create release and upload assets
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
+          generate_release_notes: true
           files: |
             dist/walkline_*.tar.gz
             dist/walkline_*.zip

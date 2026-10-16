@@ -5,7 +5,6 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
-	"walkline/internal/shared"
 	"walkline/internal/store"
 	"walkline/internal/sync"
 )
@@ -51,9 +50,6 @@ func runSync(s *store.Store, projectFilter string) error {
 		if _, err := os.Stat(projectPath); os.IsNotExist(err) {
 			continue
 		}
-		if err := cleanupOrphans(s, projectPath); err != nil {
-			fmt.Printf("  orphan cleanup warning for %s: %v\n", projectPath, err)
-		}
 		if err := sync.SyncRepo(s, projectPath); err != nil {
 			fmt.Printf("  sync %s: %v (skipped)\n", projectPath, err)
 			continue
@@ -63,24 +59,6 @@ func runSync(s *store.Store, projectFilter string) error {
 
 	if synced > 0 {
 		fmt.Printf("Synced %d commit(s) to pushed status\n", synced)
-	}
-	return nil
-}
-
-func cleanupOrphans(s *store.Store, repoPath string) error {
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		return nil
-	}
-	reachable, err := shared.RunGitLines(repoPath, "rev-list", "HEAD")
-	if err != nil {
-		return err
-	}
-	deleted, err := s.DeleteOrphans(repoPath, reachable)
-	if err != nil {
-		return err
-	}
-	if deleted > 0 {
-		fmt.Printf("Cleaned up %d orphaned commit(s)\n", deleted)
 	}
 	return nil
 }

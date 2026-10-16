@@ -1,14 +1,11 @@
-package cli
+package store
 
 import (
 	"fmt"
-	"strings"
 	"time"
-
-	"walkline/internal/store"
 )
 
-func BuildDateFilter(since, until, at string) (store.CommitFilter, error) {
+func BuildDateFilter(since, until, at string) (CommitFilter, error) {
 	count := 0
 	if since != "" {
 		count++
@@ -20,31 +17,31 @@ func BuildDateFilter(since, until, at string) (store.CommitFilter, error) {
 		count++
 	}
 	if count > 1 {
-		return store.CommitFilter{}, fmt.Errorf("--since, --until, and --at are mutually exclusive, use only one")
+		return CommitFilter{}, fmt.Errorf("--since, --until, and --at are mutually exclusive, use only one")
 	}
 
 	if since != "" {
 		ts, err := normalizeSince(since)
 		if err != nil {
-			return store.CommitFilter{}, fmt.Errorf("--since: %w", err)
+			return CommitFilter{}, fmt.Errorf("--since: %w", err)
 		}
-		return store.CommitFilter{Since: ts}, nil
+		return CommitFilter{Since: ts}, nil
 	}
 	if until != "" {
 		ts, err := normalizeUntil(until)
 		if err != nil {
-			return store.CommitFilter{}, fmt.Errorf("--until: %w", err)
+			return CommitFilter{}, fmt.Errorf("--until: %w", err)
 		}
-		return store.CommitFilter{Until: ts}, nil
+		return CommitFilter{Until: ts}, nil
 	}
 	if at != "" {
 		start, end, err := normalizeAt(at)
 		if err != nil {
-			return store.CommitFilter{}, fmt.Errorf("--at: %w", err)
+			return CommitFilter{}, fmt.Errorf("--at: %w", err)
 		}
-		return store.CommitFilter{Since: start, Until: end}, nil
+		return CommitFilter{Since: start, Until: end}, nil
 	}
-	return store.CommitFilter{}, nil
+	return CommitFilter{}, nil
 }
 
 func normalizeSince(input string) (string, error) {
@@ -82,5 +79,6 @@ func normalizeAt(input string) (start, end string, err error) {
 }
 
 func isBareDate(s string) bool {
-	return len(s) == 10 && strings.Count(s, "-") == 2
+	_, err := time.Parse("2006-01-02", s)
+	return err == nil
 }
